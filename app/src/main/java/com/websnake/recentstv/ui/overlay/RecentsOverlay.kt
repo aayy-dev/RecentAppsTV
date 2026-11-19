@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.requiredWidth
@@ -83,9 +84,12 @@ private val MENU_SHIFT = 97.dp        // the rows slide down while the hold-OK m
 private val EMPTY_SLOT_W = 320.dp
 private val GEAR_H = 38.dp            // ⚙ Settings button at the top
 private val MENU_EST_H = 240.dp       // hold-OK menu height (header + 4 rows)
-private val HEADER_BOTTOM = 100.dp    // below the title and the count line
-private val PINS_TITLE = 22.dp        // the "Pinned" line above the pins row
-private val ROW_GAP = 78.dp           // pins row → recents row: room for the focused pin's name
+private val FRAME_TOP = 96.dp         // the pinned section's frame starts below the header line
+private val FRAME_HEAD = 36.dp        // frame edge → focused pin's top: the "Pinned" title sits in it
+private val FRAME_FOOT = 66.dp        // focused pin's bottom → frame edge: room for its name
+private val FRAME_SIDE = 22.dp        // frame edge ↔ first / last pin
+private val FRAME_MIN_W = 300.dp      // wide enough for a focused pin's name (labels are up to 300dp)
+private val SECTION_GAP = 24.dp       // pinned frame → recents row
 private const val DIMMED = 0.32f
 
 /** One place in a row. [item] null = the "No recent apps" placeholder (not focusable). */
@@ -138,9 +142,10 @@ fun RecentsOverlay(
         val pinHalf = (pinDp * Motion.FOCUS_SCALE / 2f).toPx()
         val cardHalf = (cardDp * Motion.FOCUS_SCALE / 2f).toPx()
         if (hasPins) {
-            val pinsCenter = (HEADER_BOTTOM + PINS_TITLE).toPx() + pinHalf
+            val pinsCenter = (FRAME_TOP + FRAME_HEAD).toPx() + pinHalf
             pinsY = pinsCenter - viewportH / 2f
-            tasksY = maxOf(32.dp.toPx(), pinsCenter + pinHalf + ROW_GAP.toPx() + cardHalf - viewportH / 2f)
+            val frameBottom = pinsCenter + pinHalf + FRAME_FOOT.toPx()
+            tasksY = maxOf(32.dp.toPx(), frameBottom + SECTION_GAP.toPx() + cardHalf - viewportH / 2f)
         } else {
             pinsY = 0f
             tasksY = 0f
@@ -165,10 +170,18 @@ fun RecentsOverlay(
     val tasksRow = rowLayout(state.items, state.focus, { if (it == Item.KillAll) cardDp * 1.34f else cardDp }, GAP)
     val pinsRow = rowLayout(state.pins, state.pinFocus, { pinDp }, PIN_GAP)
 
-    // ── header: centred title with the count line under it; the ⚙ at the top right ──
+    /**
+     * Horizontal offset of a row's strip. The recents row scrolls so its focused app is in the middle; the pinned
+     * section stays put, centred on screen (it only scrolls if there are more pins than fit across).
+     */
+    fun offsetOf(r: RowId, layout: RowLayout): Float =
+        if (r == RowId.PINS && layout.strip.total <= viewportW) (viewportW - layout.strip.total) / 2f
+        else Geometry.stripOffset(viewportW, layout.strip, layout.focusVisual)
+
+    // ── header: the title with the count line under it at the top left; the ⚙ at the top centre ──
     Column(
-        Modifier.fillMaxWidth().padding(top = 36.dp).graphicsLayer { alpha = chrome.value },
-        horizontalAlignment = Alignment.CenterHorizontally,
+        Modifier.align(Alignment.TopStart).padding(start = 48.dp, top = 36.dp).graphicsLayer { alpha = chrome.value },
+        horizontalAlignment = Alignment.Start,
     ) {
         Text("Recent apps", style = Type.title, color = Tokens.text)
         val count = SettingsCodec.countLabel(state.tasks.size, state.pins.size)
@@ -176,19 +189,48 @@ fun RecentsOverlay(
     }
     val gearDim = animateFloatAsState(if (menuOpen) DIMMED else 1f, tween(200), label = "gearDim")
     Box(
-        Modifier.align(Alignment.TopEnd).padding(top = 40.dp, end = 48.dp)
+        Modifier.align(Alignment.TopCenter).padding(top = 36.dp)
             .graphicsLayer { alpha = gearDim.value * chrome.value },
-    ) { SettingsButton(state.gearFocused, 150.dp) }
+    ) { SettingsButton(state.gearFocused) }
 
-    // ── the "Pinned" title over the pins row ──
+    // ── the pinned section: an outlined frame around the pins, its "Pinned" title inside the top edge ──
     if (hasPins) {
-        val pinTitleA = animateFloatAsState(
-            if (menuOpen && state.ctxRow != RowId.PINS) DIMMED else 1f, tween(200), label = "pinTitle",
+        val sectionA = animateFloatAsState(
+            if (menuOpen && state.ctxRow != RowId.PINS) DIMMED else 1f, tween(200), label = "pinSection",
+        )
+        // the outline takes the accent while the focus is in the section
+        val active = animateFloatAsState(if (state.focusIn(RowId.PINS)) 1f else 0f, tween(Motion.FOCUS_MS), label = "pinActive")
+        val accent = LocalAccent.current
+        val (frameL, frameW) = with(density) {
+            val strip = pinsRow.strip
+            val ox = offsetOf(RowId.PINS, pinsRow)
+            val l = ox + strip.lefts.first() - FRAME_SIDE.toPx()
+            val r = ox + strip.lefts.last() + strip.widths.last() + FRAME_SIDE.toPx()
+            val w = maxOf(r - l, FRAME_MIN_W.toPx())
+            (l + r) / 2f - w / 2f to w
+        }
+        val fl = remember(loadId) { Animatable(frameL) }
+        val fw = remember(loadId) { Animatable(frameW) }
+        LaunchedEffect(frameL) { if (fl.targetValue != frameL) fl.animateTo(frameL, Motion.glide()) }
+        LaunchedEffect(frameW) { if (fw.targetValue != frameW) fw.animateTo(frameW, Motion.glide()) }
+        Box(
+            Modifier.fillMaxSize().drawBehind {
+                val a = sectionA.value * chrome.value
+                if (a <= 0.01f) return@drawBehind
+                val pinHalf = (pinDp * Motion.FOCUS_SCALE / 2f).toPx()
+                val center = size.height / 2f + pinsY + shift.value
+                val top = center - pinHalf - FRAME_HEAD.toPx()
+                val h = FRAME_HEAD.toPx() + pinHalf * 2f + FRAME_FOOT.toPx()
+                val cr = CornerRadius(24.dp.toPx())
+                drawRoundRect(Color.White.copy(alpha = 0.04f * a), Offset(fl.value, top), Size(fw.value, h), cr)
+                val edge = lerp(Color.White.copy(alpha = 0.16f), accent.base.copy(alpha = 0.6f), active.value)
+                drawRoundRect(edge.copy(alpha = edge.alpha * a), Offset(fl.value, top), Size(fw.value, h), cr, style = Stroke(1.5.dp.toPx()))
+            },
         )
         Row(
             Modifier.align(Alignment.Center).graphicsLayer {
-                alpha = pinTitleA.value * chrome.value
-                translationY = (pinsY - (pinDp * Motion.FOCUS_SCALE / 2f).toPx() - 14.dp.toPx() + shift.value).roundToInt().toFloat()
+                alpha = sectionA.value * chrome.value
+                translationY = (pinsY - (pinDp * Motion.FOCUS_SCALE / 2f).toPx() - FRAME_HEAD.toPx() / 2f + shift.value).roundToInt().toFloat()
             },
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -200,7 +242,7 @@ fun RecentsOverlay(
 
     @Composable
     fun DrawRow(r: RowId, layout: RowLayout) {
-        val targetTx = Geometry.stripOffset(viewportW, layout.strip, layout.focusVisual)
+        val targetTx = offsetOf(r, layout)
         val tx = remember(loadId, r) { Animatable(targetTx) }
         LaunchedEffect(targetTx, loadId) {
             if (tx.targetValue != targetTx) tx.animateTo(targetTx, Motion.glide())
@@ -277,7 +319,7 @@ fun RecentsOverlay(
         running = when (val it = state.ctxItem) { is Item.Pin -> it.running; is Item.Task -> true; else -> false },
         selected = state.ctxSel,
         anchorX = {
-            if (ctxVisual >= 0) ctxLayout.strip.center(ctxVisual) + Geometry.stripOffset(viewportW, ctxLayout.strip, ctxLayout.focusVisual)
+            if (ctxVisual >= 0) ctxLayout.strip.center(ctxVisual) + offsetOf(state.ctxRow, ctxLayout)
             else viewportW / 2f
         },
         anchorTop = {
@@ -310,7 +352,7 @@ fun RecentsOverlay(
         val vi = layout.slots.indexOfFirst { it.key == selecting }
         if (t != null && vi >= 0) {
             val w = with(density) { (layout.slots[vi].width * Motion.PRESS_SCALE).toPx() }
-            val cx = layout.strip.center(vi) + Geometry.stripOffset(viewportW, layout.strip, layout.focusVisual)
+            val cx = layout.strip.center(vi) + offsetOf(state.selectRow, layout)
             val cy = viewportH / 2f + rowY(state.selectRow) + shift.value
             SelectZoom(
                 task = t,
@@ -633,44 +675,49 @@ private fun KillAllTile(focused: Boolean, cardDp: Dp, cardShape: Shape, killing:
     }
 }
 
-/** The ⚙ Settings button at the top of the overlay. Neutral until focused (↑ from the top row). */
+/** The ⚙ Settings button at the top of the overlay, as wide as its icon and text. Neutral until focused (↑ from the top row). */
 @Composable
-private fun SettingsButton(focused: Boolean, width: Dp) {
+private fun SettingsButton(focused: Boolean) {
     val accent = LocalAccent.current
     val std = tween<Float>(Motion.FOCUS_MS, easing = Motion.standard)
     val scale = animateFloatAsState(if (focused) Motion.KILL_FOCUS_SCALE else 1f, Motion.glide(), label = "pscale")
     val f = animateFloatAsState(if (focused) 1f else 0f, std, label = "pfocus")
     val glyph by animateColorAsState(if (focused) accent.onDark else Tokens.textDim, tween(Motion.FOCUS_MS), label = "pglyph")
     val shape = RoundedCornerShape(GEAR_H / 2)
-    Box(Modifier.size(width, GEAR_H), contentAlignment = Alignment.Center) {
-        Box(
-            Modifier
-                .requiredSize(width * 1.4f, GEAR_H * 2.4f)
-                .drawBehind {
-                    if (f.value > 0.01f) drawOval(
-                        Brush.radialGradient(listOf(accent.glow.copy(alpha = accent.glow.alpha * f.value), Color.Transparent)),
+    Row(
+        Modifier
+            .height(GEAR_H)
+            .graphicsLayer { scaleX = scale.value; scaleY = scale.value }
+            .drawBehind {
+                // the glow reaches past the pill: drawn before the clip
+                if (f.value > 0.01f) {
+                    val w = size.width * 1.5f
+                    val h = size.height * 2.6f
+                    drawOval(
+                        Brush.radialGradient(
+                            listOf(accent.glow.copy(alpha = accent.glow.alpha * f.value), Color.Transparent),
+                            center = center, radius = w / 2f,
+                        ),
+                        topLeft = Offset(center.x - w / 2f, center.y - h / 2f), size = Size(w, h),
                     )
-                },
+                }
+            }
+            .clip(shape)
+            .drawBehind {
+                val outline = shape.createOutline(size, layoutDirection, this)
+                drawOutline(outline, lerp(Tokens.surface2, accent.base, f.value))
+                drawOutline(outline, lerp(Tokens.line, accent.base, f.value), style = Stroke(2.dp.toPx()))
+            }
+            .padding(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Image(
+            painter = painterResource(R.drawable.ic_settings),
+            contentDescription = "Settings",
+            colorFilter = ColorFilter.tint(glyph),
+            modifier = Modifier.size(GEAR_H * 0.5f),
         )
-        Row(
-            Modifier
-                .size(width, GEAR_H)
-                .graphicsLayer { scaleX = scale.value; scaleY = scale.value; this.shape = shape; clip = true }
-                .drawBehind {
-                    val outline = shape.createOutline(size, layoutDirection, this)
-                    drawOutline(outline, lerp(Tokens.surface2, accent.base, f.value))
-                    drawOutline(outline, lerp(Tokens.line, accent.base, f.value), style = Stroke(2.dp.toPx()))
-                },
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Image(
-                painter = painterResource(R.drawable.ic_settings),
-                contentDescription = "Settings",
-                colorFilter = ColorFilter.tint(glyph),
-                modifier = Modifier.size(GEAR_H * 0.5f),
-            )
-            Text("Settings", style = Type.small.copy(fontWeight = FontWeight.Bold), color = glyph, maxLines = 1, softWrap = false)
-        }
+        Text("Settings", style = Type.small.copy(fontWeight = FontWeight.Bold), color = glyph, maxLines = 1, softWrap = false)
     }
 }

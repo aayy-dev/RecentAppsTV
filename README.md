@@ -250,10 +250,10 @@ opened and driven:
 |---|---|
 | **Open / close** | Hold **Home** (default). Settings → *Open with* also offers **Double Home** (Home waits 0.3 s for a second press, holding it still opens the Dashboard), **Button** (any remote button you choose — it then does nothing else), or **Off**. A remote's Recents key always works, and so do button-mapper shortcuts. |
 | **Quick switch** | Opened over an app, the focus starts on the app before it: hold Home, then OK, and you are back. |
-| **Pinned apps** | Their own row above the recent apps. ↑ goes up to it, ↓ back down. A running pin also stays in the recents row. |
+| **Pinned apps** | An outlined section above the recent apps, centred (it does not scroll). ↑ goes up to it, ↓ back down. A running pin also stays in the recents row. |
 | **Options** | **Hold OK** on any app: Pin / Unpin, Add to exceptions, App info, Close. (↑ no longer opens it: ↑ moves between rows.) |
 | **Remove** | ↓ marks the app, then ↓ again or **OK** removes it; ↑ or Back keeps it. |
-| **Settings** | The ⚙ button at the top (↑ from the top row), the Menu key, or the **launcher icon** — the app's icon opens Settings, not the overlay. |
+| **Settings** | The ⚙ button at the top centre (↑ from the top row; "Recent apps" sits at the top left), the Menu key, or the **launcher icon** — the app's icon opens Settings, not the overlay. |
 | **Background** | *Fade* by default: TV Recents' dim, 60 % black at the top to 80 % at the bottom. Dim, Blur, Color and Image are still there. |
 
 The remote trigger is an accessibility service in the app (*Recent Apps remote button*), which the module turns on: it
