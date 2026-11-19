@@ -6,14 +6,16 @@ package com.websnake.recentstv.logic
    (LTR): Pinned position (RIGHT = "Right") and the colour swatches. */
 
 enum class SetRow {
+    TRIGGER, TRIGGER_KEY,                               // Open with
     KILL_ALL, FORCE_STOP, SIZE, SHAPE, ACCENT,          // Overlay
-    PINNED_LIST, PIN_POSITION, PIN_SIZE,                // Pinned apps
+    PINNED_LIST, PIN_SIZE,                              // Pinned apps
     BACKGROUND, BG_DIM, BG_COLOR, BG_IMAGE,             // Background
     EXCEPTIONS,                                         // Hidden apps
 }
 
 /** Section title shown above the first row of each group. */
 fun SetRow.section(): String? = when (this) {
+    SetRow.TRIGGER -> "Open with"
     SetRow.KILL_ALL -> "Overlay"
     SetRow.PINNED_LIST -> "Pinned apps"
     SetRow.BACKGROUND -> "Background"
@@ -43,6 +45,8 @@ sealed interface SetEffect {
     data class OpenWith(val index: Int) : SetEffect        // hand the choice to that picker app
     data class Bulk(val action: BulkAction) : SetEffect   // the screen shows a toast for it
     data object Finish : SetEffect
+    /** Settings → Open with → Button: wait for the next remote button and use it. */
+    data object LearnKey : SetEffect
 }
 
 object SettingsNav {
@@ -56,6 +60,7 @@ object SettingsNav {
             SetRow.BG_DIM -> s.background == Backdrop.DIM
             SetRow.BG_COLOR -> s.background == Backdrop.COLOR
             SetRow.BG_IMAGE -> s.background == Backdrop.IMAGE
+            SetRow.TRIGGER_KEY -> s.trigger == Trigger.BUTTON
             else -> true
         }
     }
@@ -115,6 +120,8 @@ object SettingsNav {
             Btn.UP -> st.copy(focus = (st.focus - 1).coerceAtLeast(0)) to emptyList()
             Btn.DOWN -> st.copy(focus = (st.focus + 1).coerceAtMost(last)) to emptyList()
             Btn.LEFT, Btn.RIGHT, Btn.OK -> when (row) {
+                // OK (or the chevron direction) waits for the button to use
+                SetRow.TRIGGER_KEY -> if (b == Btn.RIGHT) st to emptyList() else st to listOf(SetEffect.LearnKey)
                 // the ‹ chevron points left: LEFT / OK open
                 SetRow.EXCEPTIONS, SetRow.PINNED_LIST, SetRow.BG_IMAGE ->
                     if (b == Btn.RIGHT) st to emptyList()
@@ -152,13 +159,13 @@ object SettingsNav {
         SetRow.SIZE -> s.copy(size = step(CardSize.entries, s.size, b))
         SetRow.SHAPE -> s.copy(shape = step(CardShape.entries, s.shape, b))
         SetRow.ACCENT -> s.copy(accent = step(Accent.entries, s.accent, b))
-        SetRow.PIN_POSITION -> s.copy(pinPosition = step(PinPosition.entries, s.pinPosition, b, ltr = true))
         SetRow.PIN_SIZE -> s.copy(pinSize = step(PinSize.entries, s.pinSize, b))
         SetRow.BACKGROUND -> s.copy(background = step(Backdrop.entries, s.background, b))
         SetRow.BG_COLOR -> s.copy(bgColor = step((0 until Settings.SWATCHES).toList(), s.bgColor, b, ltr = true))
         // the bar fills from the right (RTL): LEFT and OK raise it, RIGHT lowers it
         SetRow.BG_DIM -> s.copy(bgDim = (s.bgDim + if (b == Btn.RIGHT) -DIM_STEP else DIM_STEP).coerceIn(0, 100))
-        SetRow.EXCEPTIONS, SetRow.PINNED_LIST, SetRow.BG_IMAGE -> s
+        SetRow.TRIGGER -> s.copy(trigger = step(Trigger.entries, s.trigger, b))
+        SetRow.EXCEPTIONS, SetRow.PINNED_LIST, SetRow.BG_IMAGE, SetRow.TRIGGER_KEY -> s
     }
 
     private fun listKey(st: SetState, s: Settings, b: Btn, apps: List<String>): Pair<SetState, List<SetEffect>> {

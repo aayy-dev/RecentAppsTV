@@ -37,7 +37,7 @@ import androidx.tv.material3.Text
 import com.websnake.recentstv.logic.Accent
 import com.websnake.recentstv.logic.Backdrop
 import com.websnake.recentstv.logic.CardShape
-import com.websnake.recentstv.logic.PinPosition
+import com.websnake.recentstv.logic.Trigger
 import com.websnake.recentstv.logic.PinSize
 import com.websnake.recentstv.logic.SetRow
 import com.websnake.recentstv.logic.Settings
@@ -54,7 +54,7 @@ import com.websnake.recentstv.ui.theme.shape
 
 /** Surface 2 — settings in four sections (RTL, design). [focus] = index into SettingsNav.rows. */
 @Composable
-fun SettingsScreen(settings: Settings, focus: Int, blurSupported: Boolean) {
+fun SettingsScreen(settings: Settings, focus: Int, blurSupported: Boolean, triggerOn: Boolean = true, learning: Boolean = false) {
     val rows = SettingsNav.rows(settings)
     // lazy index of each row: a section title takes a slot before its first row
     val lazyIndex = buildList {
@@ -76,7 +76,7 @@ fun SettingsScreen(settings: Settings, focus: Int, blurSupported: Boolean) {
         ) {
             rows.forEachIndexed { i, row ->
                 row.section()?.let { t -> item(key = "s-$t") { Section(t) } }
-                item(key = row.name) { RowFor(row, settings, i == focus, blurSupported) }
+                item(key = row.name) { RowFor(row, settings, i == focus, blurSupported, triggerOn, learning) }
             }
         }
     }
@@ -89,7 +89,27 @@ private fun Section(t: String) = Text(
 )
 
 @Composable
-private fun RowFor(row: SetRow, s: Settings, focused: Boolean, blurSupported: Boolean) = when (row) {
+private fun RowFor(row: SetRow, s: Settings, focused: Boolean, blurSupported: Boolean, triggerOn: Boolean, learning: Boolean) = when (row) {
+    SetRow.TRIGGER -> SettingRow(
+        "Open Recent apps",
+        when {
+            !triggerOn -> "Needs the Magisk module (system app). The shortcut and launcher still work."
+            s.trigger == Trigger.HOLD_HOME -> "Hold Home. A short press still goes Home."
+            s.trigger == Trigger.DOUBLE_HOME -> "Press Home twice. Home waits 0.3 s for a second press; holding it opens the Dashboard."
+            s.trigger == Trigger.BUTTON -> "A remote button of your choice. That button does nothing else."
+            else -> "Only from a shortcut, a button-mapper app or the Recents key."
+        },
+        focused,
+    ) { Segmented(listOf("Hold Home", "Double Home", "Button", "Off"), s.trigger.ordinal) }
+    SetRow.TRIGGER_KEY -> SettingRow(
+        "Button",
+        when {
+            learning -> "Press the button to use now…"
+            s.triggerKey == 0 -> "None yet · press OK, then the button"
+            else -> "${keyName(s.triggerKey)} · press OK to change"
+        },
+        focused,
+    ) { Chevron() }
     SetRow.KILL_ALL -> SettingRow("Show Kill All", "A clear-all tile at the start of the row.", focused) { Toggle(s.showKillAll) }
     SetRow.FORCE_STOP -> SettingRow("Force stop on kill", "Also force-stop the app so it can't relaunch.", focused) { Toggle(s.forceStopOnKill) }
     SetRow.SIZE -> SettingRow("Size of task", "Scales every card in the overlay.", focused) {
@@ -103,27 +123,28 @@ private fun RowFor(row: SetRow, s: Settings, focused: Boolean, blurSupported: Bo
         SwatchRow(Accent.entries.map { it.color }, s.accent.ordinal)
     }
     SetRow.PINNED_LIST -> SettingRow("Pinned apps", SettingsCodec.pinnedSummary(s.pinned.size), focused) { Chevron() }
-    SetRow.PIN_POSITION -> SettingRow("Pinned position", "Which end of the row pinned apps stay on.", focused) {
-        PositionPreview(s.pinPosition)
-        // read literally: DPAD_RIGHT selects "Right"
-        CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-            Segmented(listOf("Left", "Right"), s.pinPosition.ordinal)
-        }
-    }
     SetRow.PIN_SIZE -> SettingRow("Pinned icon size", "Pinned apps can be smaller than tasks.", focused) {
         SizePreview(s.pinSize)
         Segmented(listOf("Small", "Same as tasks"), s.pinSize.ordinal)
     }
     SetRow.BACKGROUND -> SettingRow(
         "Background",
-        if (s.background == Backdrop.BLUR && !blurSupported) "Blur isn't available on this device — Dim is used." else "What sits behind the row.",
+        when {
+            s.background == Backdrop.BLUR && !blurSupported -> "Blur isn't available on this device — Dim is used."
+            s.background == Backdrop.FADE -> "TV Recents' dim: the app shows through, darker at the bottom."
+            else -> "What sits behind the row."
+        },
         focused,
-    ) { Segmented(listOf("Dim", "Blur", "Color", "Image"), s.background.ordinal) }
+    ) { Segmented(listOf("Fade", "Dim", "Blur", "Color", "Image"), s.background.ordinal) }
     SetRow.BG_DIM -> SettingRow("Dim level", "How much the running app is hidden.", focused) { DimBar(s.bgDim) }
     SetRow.BG_COLOR -> SettingRow("Background color", BackdropSwatches[s.bgColor].first, focused) { Swatches(s.bgColor) }
     SetRow.BG_IMAGE -> SettingRow("Background image", s.bgImage?.let { "$it · from device storage" } ?: "Choose an image from device storage", focused) { Chevron() }
     SetRow.EXCEPTIONS -> SettingRow("Exceptions", SettingsCodec.exceptionsSummary(s.exceptions.size), focused) { Chevron() }
 }
+
+/** KEYCODE_BOOKMARK → "Bookmark". */
+fun keyName(code: Int): String = android.view.KeyEvent.keyCodeToString(code).removePrefix("KEYCODE_")
+    .split('_').joinToString(" ") { it.lowercase().replaceFirstChar(Char::uppercase) }
 
 @Composable
 private fun Chevron() = Text("‹", style = Type.title.copy(fontWeight = FontWeight.Bold), color = Tokens.textDim)
@@ -162,24 +183,6 @@ private fun Swatches(selected: Int) {
                         .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(percent = 50)),
                 )
             }
-        }
-    }
-}
-
-/** Mini row diagram: pins on the chosen side, tasks, Kill All (accent) at the right. Always LTR. */
-@Composable
-private fun PositionPreview(pos: PinPosition) {
-    val accent = LocalAccent.current
-    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
-        Row(
-            Modifier.clip(RoundedCornerShape(6.dp)).background(Tokens.segBg).border(1.dp, Tokens.line, RoundedCornerShape(6.dp))
-                .padding(horizontal = 7.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically,
-        ) {
-            val pins = @Composable { repeat(3) { Box(Modifier.size(7.5.dp).clip(RoundedCornerShape(2.dp)).background(Color(0xFFC9CED6))) } }
-            val tasks = @Composable { repeat(3) { Box(Modifier.size(11.dp).clip(RoundedCornerShape(3.dp)).background(Color(0xFF3A3F48))) } }
-            if (pos == PinPosition.LEFT) { pins(); Spacer(Modifier.width(4.dp)); tasks() } else { tasks(); Spacer(Modifier.width(4.dp)); pins() }
-            Box(Modifier.size(13.dp).clip(RoundedCornerShape(3.dp)).background(accent.tint).border(1.dp, accent.base, RoundedCornerShape(3.dp)))
         }
     }
 }

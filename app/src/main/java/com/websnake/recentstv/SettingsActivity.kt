@@ -64,6 +64,8 @@ class SettingsActivity : ComponentActivity() {
     private var imagesLoading by mutableStateOf(false)
     private var imageAccess by mutableStateOf(false)
     private var pickerOpenedAt = 0L
+    private var learning by mutableStateOf(false)
+    private var learnJob: Job? = null
 
     private val blurSupported by lazy {
         android.os.Build.VERSION.SDK_INT >= 31 && runCatching { windowManager.isCrossWindowBlurEnabled }.getOrDefault(false)
@@ -97,7 +99,12 @@ class SettingsActivity : ComponentActivity() {
                             label = "screen",
                         ) { screen ->
                             when (screen) {
-                                SetScreen.SETTINGS -> SettingsScreen(settings, nav.focus, blurSupported)
+                                SetScreen.SETTINGS -> SettingsScreen(
+                                    settings, nav.focus, blurSupported,
+                                    triggerOn = com.websnake.recentstv.shizuku.Privileged.isSystem ||
+                                        com.websnake.recentstv.trigger.TriggerService.running,
+                                    learning = learning,
+                                )
                                 SetScreen.EXCEPTIONS -> AppListScreen(
                                     screen, apps, { it in settings.exceptions }, settings.exceptions.count { e -> apps.any { it.packageName == e } },
                                     nav.listFocus, nav.listAct, appsLoading,
@@ -137,8 +144,35 @@ class SettingsActivity : ComponentActivity() {
                 }
             )
             SetEffect.Finish -> finish()
+            SetEffect.LearnKey -> learnKey()
         }
         return true
+    }
+
+    /** Settings → Open with → Button: the trigger service hands over the next remote button (10 s to press it). */
+    private fun learnKey() {
+        if (!com.websnake.recentstv.trigger.TriggerService.running) { showToast("Needs the Magisk module"); return }
+        learning = true
+        learnJob?.cancel()
+        com.websnake.recentstv.trigger.TriggerService.learn = { code ->
+            learnJob?.cancel()
+            learning = false
+            val n = settings.copy(triggerKey = code)
+            settings = n
+            lifecycleScope.launch { store.save(n) }
+            showToast("${com.websnake.recentstv.ui.settings.keyName(code)} now opens Recent apps")
+        }
+        learnJob = lifecycleScope.launch {
+            delay(10_000)
+            com.websnake.recentstv.trigger.TriggerService.learn = null
+            learning = false
+            showToast("No button pressed")
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        if (learning) { com.websnake.recentstv.trigger.TriggerService.learn = null; learnJob?.cancel(); learning = false }
     }
 
     private fun loadApps() {

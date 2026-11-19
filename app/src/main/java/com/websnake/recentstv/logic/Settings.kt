@@ -7,14 +7,14 @@ enum class CardSize { SMALL, MEDIUM, LARGE }
 enum class CardShape { SQUARE, ROUNDED, CIRCLE }
 enum class Accent { GREEN, BLUE, PURPLE, AMBER, PINK }
 
-/** Settings → Pinned position. LEFT (default) = far end of the RTL row; RIGHT = next to Kill All. */
-enum class PinPosition { LEFT, RIGHT }
-
 /** Settings → Pinned icon size. SMALL (default) = 72 % of a task card. */
 enum class PinSize(val factor: Float) { SMALL(0.72f), SAME(1f) }
 
-/** Settings → Background: what sits behind the row. */
-enum class Backdrop { DIM, BLUR, COLOR, IMAGE }
+/** Settings → Background: what sits behind the row. FADE (default) = TV Recents' dim: darker at the bottom. */
+enum class Backdrop { FADE, DIM, BLUR, COLOR, IMAGE }
+
+/** Settings → Open with: the remote gesture that opens (and closes) the overlay (trigger/TriggerService). */
+enum class Trigger { HOLD_HOME, DOUBLE_HOME, BUTTON, OFF }
 
 data class Settings(
     val showKillAll: Boolean = true,
@@ -25,11 +25,12 @@ data class Settings(
     val bgDim: Int = DEFAULT_DIM,            // DIM backdrop strength, 0..100 %
     val forceStopOnKill: Boolean = true,
     val pinned: List<String> = emptyList(),  // ordered: the order the user pinned them in
-    val pinPosition: PinPosition = PinPosition.LEFT,
     val pinSize: PinSize = PinSize.SMALL,
-    val background: Backdrop = Backdrop.DIM,
+    val background: Backdrop = Backdrop.FADE,
     val bgColor: Int = 0,                    // index into the colour swatches
     val bgImage: String? = null,             // display name of the picked image (the copy lives in app storage)
+    val trigger: Trigger = Trigger.HOLD_HOME,
+    val triggerKey: Int = 0,                 // Android key code for Trigger.BUTTON (0 = none chosen yet)
 ) {
     companion object {
         const val DEFAULT_DIM = 66           // design: scrim rgba(0,0,0,.66)
@@ -47,11 +48,12 @@ object SettingsKeys {
     const val BG_DIM = "bg_dim_pct"
     const val FORCE_STOP = "force_stop_on_kill"
     const val PINNED = "pinned"              // package names joined by '\n' (a string keeps the order)
-    const val PIN_POSITION = "pin_position"
     const val PIN_SIZE = "pin_size"
     const val BACKGROUND = "background"
     const val BG_COLOR = "bg_color"
     const val BG_IMAGE = "bg_image"
+    const val TRIGGER = "trigger"
+    const val TRIGGER_KEY = "trigger_key"
 }
 
 object SettingsCodec {
@@ -68,11 +70,12 @@ object SettingsCodec {
             bgDim = ((get(SettingsKeys.BG_DIM) as? Int) ?: d.bgDim).coerceIn(0, 100),
             forceStopOnKill = get(SettingsKeys.FORCE_STOP) as? Boolean ?: d.forceStopOnKill,
             pinned = decodeList(get(SettingsKeys.PINNED)),
-            pinPosition = enumOr(get(SettingsKeys.PIN_POSITION), d.pinPosition),
             pinSize = enumOr(get(SettingsKeys.PIN_SIZE), d.pinSize),
             background = enumOr(get(SettingsKeys.BACKGROUND), d.background),
             bgColor = ((get(SettingsKeys.BG_COLOR) as? Int) ?: d.bgColor).coerceIn(0, Settings.SWATCHES - 1),
             bgImage = (get(SettingsKeys.BG_IMAGE) as? String)?.takeIf { it.isNotBlank() },
+            trigger = enumOr(get(SettingsKeys.TRIGGER), d.trigger),
+            triggerKey = ((get(SettingsKeys.TRIGGER_KEY) as? Int) ?: d.triggerKey).coerceAtLeast(0),
         )
     }
 
@@ -86,11 +89,12 @@ object SettingsCodec {
         SettingsKeys.BG_DIM to s.bgDim.coerceIn(0, 100),
         SettingsKeys.FORCE_STOP to s.forceStopOnKill,
         SettingsKeys.PINNED to s.pinned.joinToString("\n"),
-        SettingsKeys.PIN_POSITION to s.pinPosition.name,
         SettingsKeys.PIN_SIZE to s.pinSize.name,
         SettingsKeys.BACKGROUND to s.background.name,
         SettingsKeys.BG_COLOR to s.bgColor.coerceIn(0, Settings.SWATCHES - 1),
         SettingsKeys.BG_IMAGE to (s.bgImage ?: ""),
+        SettingsKeys.TRIGGER to s.trigger.name,
+        SettingsKeys.TRIGGER_KEY to s.triggerKey,
     )
 
     /** Ordered, blank-free, each package once. */

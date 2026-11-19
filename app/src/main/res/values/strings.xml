@@ -4,6 +4,8 @@
     <string name="settings_title">Recent Apps Settings</string>
 
     <string name="shortcut_recents_short">Recents</string>
+    <string name="trigger_label">Recent Apps remote button</string>
+    <string name="trigger_desc">Opens Recent apps from the remote (Hold Home, Double Home or a button you choose). Reads only those keys; nothing is collected.</string>
     <string name="shortcut_recents_long">Open Recent Apps</string>
 
     <!-- Overlay -->

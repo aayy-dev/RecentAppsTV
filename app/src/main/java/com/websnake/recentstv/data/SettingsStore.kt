@@ -34,11 +34,11 @@ private val Context.legacyStore by preferencesDataStore(name = "recents_settings
 class SettingsStore(private val context: Context) {
 
     companion object {
-        private const val FILE = "recents_settings_v2"
+        const val FILE = "recents_settings_v2"
         private const val MIGRATED = "_migrated_v1"
         @Volatile private var cached: Settings? = null
         private val bools = setOf(SettingsKeys.SHOW_KILL_ALL, SettingsKeys.FORCE_STOP)
-        private val ints = setOf(SettingsKeys.BG_DIM, SettingsKeys.BG_COLOR)
+        private val ints = setOf(SettingsKeys.BG_DIM, SettingsKeys.BG_COLOR, SettingsKeys.TRIGGER_KEY)
         private val sets = setOf(SettingsKeys.EXCEPTIONS)
 
         /** Begin loading the file off the main thread (call at process start). */

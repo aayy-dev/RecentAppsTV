@@ -35,6 +35,11 @@
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.MANAGE_ACTIVITY_TASKS"
         tools:ignore="ProtectedPermissions" />
+    <!-- Turns on its own trigger service (accessibility), and opens the overlay from it at any time. -->
+    <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.START_ACTIVITIES_FROM_BACKGROUND"
+        tools:ignore="ProtectedPermissions" />
 
     <application
         android:name=".RecentsApp"
@@ -57,22 +62,12 @@
             android:resizeableActivity="false"
             android:screenOrientation="landscape">
 
-            <!-- Launcher target (also makes it a valid shortcut intent). -->
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
-                <category android:name="android.intent.category.LAUNCHER" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-            <!-- Also respond to an explicit VIEW action (used by the shortcuts). -->
+            <!-- Opened by the remote trigger (TriggerService), a shortcut or a button-mapper app; not from the
+                 launcher: the launcher icon opens Settings. -->
             <intent-filter>
                 <action android:name="com.websnake.recentstv.OPEN_RECENTS" />
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
-
-            <meta-data
-                android:name="android.app.shortcuts"
-                android:resource="@xml/shortcuts" />
         </activity>
 
         <!-- Leanback-style settings, also reachable from the overlay. -->
@@ -80,8 +75,17 @@
             android:name=".SettingsActivity"
             android:theme="@style/Theme.Recents.Solid"
             android:exported="true"
-            android:label="@string/settings_title"
+            android:label="@string/app_name"
             android:screenOrientation="landscape">
+            <!-- The launcher icon: Settings (the overlay itself opens from the remote). -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
             <intent-filter>
                 <action android:name="android.intent.action.APPLICATION_PREFERENCES" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -114,6 +118,20 @@
             android:excludeFromRecents="true"
             android:noHistory="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- The remote trigger: Hold Home / Double Home / a chosen button / the Recents key (Settings → Open with). -->
+        <service
+            android:name=".trigger.TriggerService"
+            android:exported="true"
+            android:label="@string/trigger_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/trigger_service" />
+        </service>
 
         <provider
             android:name="rikka.shizuku.ShizukuProvider"

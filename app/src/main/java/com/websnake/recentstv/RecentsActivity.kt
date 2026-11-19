@@ -138,6 +138,11 @@ class RecentsActivity : ComponentActivity() {
                     Modifier.fillMaxSize().drawBehind {
                         if (scrim <= 0f) return@drawBehind
                         when {
+                            // TV Recents' scrim: 60 % black at the top to 80 % at the bottom
+                            bg == Backdrop.FADE -> drawRect(
+                                Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.6f), Color.Black.copy(alpha = 0.8f))),
+                                alpha = scrim,
+                            )
                             bg == Backdrop.COLOR -> drawRect(BackdropSwatches[settings.bgColor].second, alpha = 0.94f * scrim)
                             bg == Backdrop.IMAGE -> if (backdropImage == null) drawRect(Tokens.bg, alpha = 0.94f * scrim)
                             blurOn -> drawRect(Color.Black, alpha = 0.42f * scrim)

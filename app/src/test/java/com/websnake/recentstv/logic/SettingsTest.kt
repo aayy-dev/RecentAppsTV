@@ -16,13 +16,14 @@ class SettingsTest {
     @Test fun `P-SET-01 decode of an empty store gives the defaults (design values)`() {
         val s = SettingsCodec.decode { null }
         assertEquals(Settings(), s); assertEquals(66, s.bgDim); assertEquals(CardSize.MEDIUM, s.size)
-        assertEquals(PinPosition.LEFT, s.pinPosition); assertEquals(PinSize.SMALL, s.pinSize); assertEquals(Backdrop.DIM, s.background)
+        assertEquals(PinSize.SMALL, s.pinSize); assertEquals(Backdrop.FADE, s.background)
+        assertEquals(Trigger.HOLD_HOME, s.trigger); assertEquals(0, s.triggerKey)
         assertTrue(s.pinned.isEmpty()); assertNull(s.bgImage)
     }
 
     @Test fun `P-SET-02 encode then decode round-trips every field (v1 key names kept)`() {
         val s = Settings(false, CardSize.LARGE, CardShape.CIRCLE, setOf("x"), Accent.PINK, 40, false,
-            listOf("p.b", "p.a"), PinPosition.RIGHT, PinSize.SAME, Backdrop.IMAGE, 3, "wall.jpg")
+            listOf("p.b", "p.a"), PinSize.SAME, Backdrop.IMAGE, 3, "wall.jpg", Trigger.BUTTON, 174)
         val m = SettingsCodec.encode(s)
         assertEquals(s, SettingsCodec.decode { m[it] })
         assertTrue(m.keys.containsAll(listOf("show_kill_all", "bg_dim_pct", "force_stop_on_kill", "exceptions", "pinned")))
@@ -55,12 +56,13 @@ class SettingsTest {
     }
 
     @Test fun `P-SET-06 rows follow the Background choice and carry their section titles`() {
-        assertTrue(SetRow.BG_DIM in SettingsNav.rows(Settings()))
+        assertTrue(SetRow.BG_DIM !in SettingsNav.rows(Settings()) && SetRow.BG_DIM in SettingsNav.rows(Settings(background = Backdrop.DIM)))
         val color = SettingsNav.rows(Settings(background = Backdrop.COLOR))
         assertTrue(SetRow.BG_COLOR in color && SetRow.BG_DIM !in color && SetRow.BG_IMAGE !in color)
         assertTrue(SetRow.BG_IMAGE in SettingsNav.rows(Settings(background = Backdrop.IMAGE)))
         assertEquals(10, SettingsNav.rows(Settings(background = Backdrop.BLUR)).size)
-        assertEquals(listOf("Overlay", "Pinned apps", "Background", "Hidden apps"), SetRow.entries.mapNotNull { it.section() })
+        assertTrue(SetRow.TRIGGER_KEY in SettingsNav.rows(Settings(trigger = Trigger.BUTTON)))
+        assertEquals(listOf("Open with", "Overlay", "Pinned apps", "Background", "Hidden apps"), SetRow.entries.mapNotNull { it.section() })
     }
 
     @Test fun `P-SET-07 UP DOWN move between rows and clamp`() {
@@ -89,24 +91,23 @@ class SettingsTest {
         assertEquals(CardShape.CIRCLE, saved(key(at(SetRow.SHAPE), Settings(), Btn.LEFT).second).shape)
         assertEquals(Accent.BLUE, saved(key(at(SetRow.ACCENT), Settings(), Btn.OK).second).accent)
         assertEquals(PinSize.SAME, saved(key(at(SetRow.PIN_SIZE), Settings(), Btn.LEFT).second).pinSize)
-        assertEquals(Backdrop.BLUR, saved(key(at(SetRow.BACKGROUND), Settings(), Btn.LEFT).second).background)
+        assertEquals(Backdrop.DIM, saved(key(at(SetRow.BACKGROUND), Settings(), Btn.LEFT).second).background)
     }
 
-    @Test fun `P-SET-10 Pinned position and colour swatches read literally (LTR)`() {
-        assertEquals(PinPosition.RIGHT, saved(key(at(SetRow.PIN_POSITION), Settings(), Btn.RIGHT).second).pinPosition)
-        assertEquals(PinPosition.LEFT, saved(key(at(SetRow.PIN_POSITION), Settings(pinPosition = PinPosition.RIGHT), Btn.LEFT).second).pinPosition)
+    @Test fun `P-SET-10 colour swatches read literally (LTR)`() {
         val c = Settings(background = Backdrop.COLOR)
         assertEquals(1, saved(key(at(SetRow.BG_COLOR, c), c, Btn.RIGHT).second).bgColor)
         assertTrue(key(at(SetRow.BG_COLOR, c), c, Btn.LEFT).second.isEmpty())
     }
 
     @Test fun `P-SET-11 dim bar - LEFT and OK raise by 5, RIGHT lowers, clamped 0 to 100`() {
-        val st = at(SetRow.BG_DIM)
-        assertEquals(71, saved(key(st, Settings(), Btn.LEFT).second).bgDim)
-        assertEquals(71, saved(key(st, Settings(), Btn.OK).second).bgDim)
-        assertEquals(61, saved(key(st, Settings(), Btn.RIGHT).second).bgDim)
-        assertTrue(key(st, Settings(bgDim = 100), Btn.LEFT).second.isEmpty())
-        assertTrue(key(st, Settings(bgDim = 0), Btn.RIGHT).second.isEmpty())
+        val d = Settings(background = Backdrop.DIM)
+        val st = at(SetRow.BG_DIM, d)
+        assertEquals(71, saved(key(st, d, Btn.LEFT).second).bgDim)
+        assertEquals(71, saved(key(st, d, Btn.OK).second).bgDim)
+        assertEquals(61, saved(key(st, d, Btn.RIGHT).second).bgDim)
+        assertTrue(key(st, d.copy(bgDim = 100), Btn.LEFT).second.isEmpty())
+        assertTrue(key(st, d.copy(bgDim = 0), Btn.RIGHT).second.isEmpty())
     }
 
     @Test fun `P-SET-12 Exceptions and Pinned apps rows - OK or LEFT open a list and load apps, RIGHT nothing`() {
@@ -227,5 +228,14 @@ class SettingsTest {
         assertEquals(listOf(SetEffect.OpenWith(0)), img(1, Btn.OK, n = emptyList()).second)
         assertEquals(SetScreen.SETTINGS, img(4, Btn.BACK).first.screen)
         assertTrue(img(4, Btn.MENU).second.isEmpty())
+    }
+
+    @Test fun `P-SET-12 Open with cycles the trigger, the Button row waits for a key`() {
+        assertEquals(Trigger.DOUBLE_HOME, saved(key(at(SetRow.TRIGGER), Settings(), Btn.OK).second).trigger)
+        assertEquals(Trigger.OFF, saved(key(at(SetRow.TRIGGER, Settings(trigger = Trigger.BUTTON)), Settings(trigger = Trigger.BUTTON), Btn.LEFT).second).trigger)
+        val b = Settings(trigger = Trigger.BUTTON)
+        assertEquals(listOf(SetEffect.LearnKey), key(at(SetRow.TRIGGER_KEY, b), b, Btn.OK).second)
+        assertTrue(key(at(SetRow.TRIGGER_KEY, b), b, Btn.RIGHT).second.isEmpty())
+        assertEquals(b, SettingsNav.edit(SetRow.TRIGGER_KEY, b, Btn.OK))
     }
 }
