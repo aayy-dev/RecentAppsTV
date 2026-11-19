@@ -24,6 +24,16 @@ Magisk module, 2026-11-19, on the `playtv` AVD (Google TV, Android 16, x86_64, M
 → `startActivityFromRecents(123)=2`; ↓ ↓ → `removeTask(124)=true` and the app force-stopped; Kill all → 7 tasks removed,
 only the launcher / system tasks left; no SELinux or privapp denials in logcat. 184 JVM tests pass.
 
+Hybrid overlay, 2026-11-19, same AVD, keys sent as real evdev events (`sendevent` on the AT keyboard: 172 = Home,
+28 = Enter, 156 = Bookmark): Hold Home over Aurora Store → overlay, focus on the app before it (quick switch); hold
+OK → menu → Pin to row → the pins row appears above; ↑ → pins row, ↑ → ⚙, OK → Settings; Open with → Button → OK →
+Bookmark learned; Bookmark opens and closes the overlay, Home still goes Home; Double Home opens and closes, one Home
+goes Home; back on Hold Home: ↓ then OK → `removeTask(137)=true`; Kill all → recents gone, the pin stays, focus on the
+pins row over the placeholder; Hold Home again closes; the launcher icon opens Settings. 181 JVM tests pass.
+
+TV Recents 0.1.0-alpha.2 was used the same way for comparison (double Home over Aurora: thumbnail cards, no header,
+↓ then OK removes, a second double Home closes, single Home waits 300 ms).
+
 1.1 was run on a Samsung Galaxy A50 (Android 11, 2340×1080, Shizuku 13.6 in root and in shell mode) on 2026-11-08.
 Found and fixed on the way: font drawn at weight 200; OK eaten after the hold menu (also in 1.0); OK during a
 fly-off switched to the app being removed; the context menu spanned the whole phone screen; full stops jumped to the

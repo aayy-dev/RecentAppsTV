@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+Magisk module build (`magisk-root`): a hybrid of this app and [TV Recents](https://github.com/jcgw22/android-tv-recents).
+
+- **Pinned apps on their own row** above the recent apps (`RowId.PINS`); a running pin stays in the recents row too.
+  ↑ / ↓ move between the rows, ↑ from the top row reaches the ⚙ Settings button, which left the row for the top right.
+- **Options only on hold OK.** ↑ no longer opens the menu.
+- **Quick switch** (TV Recents): opened over an app, the focus starts on the app before it.
+- **↓ then OK removes** (TV Recents), besides ↓ ↓; Back cancels a pending removal before it closes the overlay.
+- **Open with** (Settings): Hold Home (default) / Double Home / a remote button you choose / Off, plus the Recents key,
+  through an accessibility key filter (`trigger/TriggerService`, rules in `logic/TriggerEngine`) that the app turns on
+  itself as a system app (`WRITE_SECURE_SETTINGS`; also `service.sh`). Holding Home in Double Home mode still opens the
+  Dashboard.
+- **The launcher icon opens Settings**; the overlay opens from the remote (and shortcuts / button mappers).
+- **Fade background** (TV Recents' dim, 60 → 80 % black top to bottom) is the new default; *Pinned position* is gone.
+
 - Root without Shizuku: `./gradlew :magisk:moduleZip` wraps the release APK in a Magisk module that installs it as a
   privileged system app (privapp allowlist + a framework overlay naming it the system recents component, for
   `REMOVE_TASKS`). The app sees it holds `REAL_GET_TASKS` and then calls the system services directly and runs

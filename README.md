@@ -239,7 +239,26 @@ adb reboot
 ```
 
    (or Magisk → Modules → *Install from storage*, where the device has a file picker).
-3. Map a remote button to it as above.
+3. Hold **Home** on the remote: Recent apps opens over whatever is playing. Hold it again (or Back) to close it.
+
+### Using it (Magisk module)
+
+The module build mixes this app's look with the way [TV Recents](https://github.com/jcgw22/android-tv-recents) is
+opened and driven:
+
+| | |
+|---|---|
+| **Open / close** | Hold **Home** (default). Settings → *Open with* also offers **Double Home** (Home waits 0.3 s for a second press, holding it still opens the Dashboard), **Button** (any remote button you choose — it then does nothing else), or **Off**. A remote's Recents key always works, and so do button-mapper shortcuts. |
+| **Quick switch** | Opened over an app, the focus starts on the app before it: hold Home, then OK, and you are back. |
+| **Pinned apps** | Their own row above the recent apps. ↑ goes up to it, ↓ back down. A running pin also stays in the recents row. |
+| **Options** | **Hold OK** on any app: Pin / Unpin, Add to exceptions, App info, Close. (↑ no longer opens it: ↑ moves between rows.) |
+| **Remove** | ↓ marks the app, then ↓ again or **OK** removes it; ↑ or Back keeps it. |
+| **Settings** | The ⚙ button at the top (↑ from the top row), the Menu key, or the **launcher icon** — the app's icon opens Settings, not the overlay. |
+| **Background** | *Fade* by default: TV Recents' dim, 60 % black at the top to 80 % at the bottom. Dim, Blur, Color and Image are still there. |
+
+The remote trigger is an accessibility service in the app (*Recent Apps remote button*), which the module turns on: it
+sees each key before the system does, so it can take Home or a button for itself (a getevent watcher like TV Recents'
+can only listen). It reads keys only, no screen content.
 
 Uninstall: remove it in Magisk → Modules, or `adb shell su -c 'touch /data/adb/modules/recentappstv/remove'`, then reboot.
 If a boot never completes three times in a row, the module disables itself.
@@ -249,9 +268,9 @@ What the module adds (`magisk/`):
 | Part | Why |
 |---|---|
 | `system/priv-app/RecentAppsTV` | the release APK as a privileged system app |
-| privapp allowlist | `REAL_GET_TASKS`, `START_TASKS_FROM_RECENTS`, `FORCE_STOP_PACKAGES`, `DUMP`, `PACKAGE_USAGE_STATS` |
+| privapp allowlist | `REAL_GET_TASKS`, `START_TASKS_FROM_RECENTS`, `FORCE_STOP_PACKAGES`, `DUMP`, `PACKAGE_USAGE_STATS`, `WRITE_SECURE_SETTINGS` (turns its trigger service on), `START_ACTIVITIES_FROM_BACKGROUND` |
 | framework overlay | `config_recentsComponentName` → the app (a stub activity), which gives it the recents role: `REMOVE_TASKS`, `MANAGE_ACTIVITY_TASKS`. TV builds leave this slot empty |
-| `service.sh` | allows the usage-access app-op at each boot (Shizuku did this before) |
+| `service.sh` | allows the usage-access app-op at each boot (Shizuku did this before) and turns on the remote-trigger service |
 
 At start the app checks whether it holds `REAL_GET_TASKS`; if so it calls the system services directly and runs
 `dumpsys` as itself (`shizuku/Privileged.kt`), else it uses Shizuku as before. The approach (priv-app + recents-role
