@@ -52,6 +52,7 @@ import com.websnake.recentstv.logic.Settings
 import com.websnake.recentstv.logic.Stored
 import com.websnake.recentstv.logic.SettingsNav
 import com.websnake.recentstv.logic.TaskRef
+import com.websnake.recentstv.shizuku.Privileged
 import com.websnake.recentstv.shizuku.ShizukuManager
 import com.websnake.recentstv.ui.overlay.RecentsOverlay
 import com.websnake.recentstv.ui.overlay.Toast
@@ -108,6 +109,7 @@ class RecentsActivity : ComponentActivity() {
         if (st.scene == Scene.LOADING || st.scene == Scene.SHIZUKU || limited) reload()
     }
     private val binderDead = Shizuku.OnBinderDeadListener {
+        if (Privileged.isSystem) return@OnBinderDeadListener     // a system app: Shizuku isn't ours to lose
         RecentTasksRepository.dropBinders()
         if (lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) st = Overlay.needShizuku(st)
     }
@@ -249,7 +251,7 @@ class RecentsActivity : ComponentActivity() {
             val t0 = SystemClock.uptimeMillis()
             val now = System.currentTimeMillis()
             val sDef = async(Dispatchers.IO) { store.current() }
-            val shz = ShizukuManager.state()
+            val shz = Privileged.state()
             val ready = shz.ready
             shizukuRunning = shz.binderAlive
             // Shizuku off (a TV reboot): the last row + usage access, if there is anything to show; else the gate
@@ -357,7 +359,7 @@ class RecentsActivity : ComponentActivity() {
             }
             Effect.Close -> close()
             Effect.GateAction -> {
-                val s = ShizukuManager.state()
+                val s = Privileged.state()
                 if (!s.binderAlive) ShizukuManager.openShizuku(this)
                 else if (!s.permissionGranted) ShizukuManager.requestPermission()
                 reload()

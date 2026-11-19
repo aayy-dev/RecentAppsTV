@@ -19,6 +19,23 @@
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />
 
+    <!-- Installed by the Magisk module (magisk/) the app holds these itself instead of going through Shizuku;
+         a normal install is never granted them. Privileged ones are in the module's privapp allowlist
+         (magisk/module/system/etc/permissions); REMOVE_TASKS and MANAGE_ACTIVITY_TASKS come with the system
+         recents role its framework overlay assigns (config_recentsComponentName → .SystemRecentsActivity). -->
+    <uses-permission android:name="android.permission.REAL_GET_TASKS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.START_TASKS_FROM_RECENTS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.FORCE_STOP_PACKAGES"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.DUMP"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.REMOVE_TASKS"
+        tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.MANAGE_ACTIVITY_TASKS"
+        tools:ignore="ProtectedPermissions" />
+
     <application
         android:name=".RecentsApp"
         android:allowBackup="false"
@@ -86,6 +103,17 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+
+        <!-- Magisk module only: the component named as the system's recents (config_recentsComponentName), which
+             grants the recents-role permissions. Its own class so the overlay keeps a normal activity type
+             (the recents component's activities become ACTIVITY_TYPE_RECENTS); nothing in TV SystemUI starts it,
+             and if something does it just opens the overlay. -->
+        <activity
+            android:name=".SystemRecentsActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
         <provider
             android:name="rikka.shizuku.ShizukuProvider"

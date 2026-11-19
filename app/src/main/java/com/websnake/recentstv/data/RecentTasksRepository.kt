@@ -11,21 +11,17 @@ import com.websnake.recentstv.logic.Stored
 import com.websnake.recentstv.logic.TaskList
 import com.websnake.recentstv.logic.TaskRef
 import com.websnake.recentstv.logic.TaskSource
+import com.websnake.recentstv.shizuku.Privileged
 import com.websnake.recentstv.shizuku.ShizukuManager
-import rikka.shizuku.Shizuku
-import rikka.shizuku.ShizukuBinderWrapper
-import rikka.shizuku.SystemServiceHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import java.lang.reflect.Method
 
 /**
- * Reads and changes the system task list through Shizuku, behind one interface so
- * the UI never touches Shizuku directly.
+ * Reads and changes the system task list through [Privileged] (Shizuku, or the app itself when the Magisk module
+ * installs it as a privileged system app), behind one interface so the UI never touches either directly.
  *
  * The calls are the ones Android's own recents screen makes (SystemUI / Launcher3 through
  * ActivityManagerWrapper and the WM Shell RecentTasksController):
@@ -59,7 +55,7 @@ class RecentTasksRepository(private val context: Context) {
         }.getOrDefault(emptySet())
     }
 
-    fun ready(): Boolean = ShizukuManager.state().ready
+    fun ready(): Boolean = Privileged.ready()
 
     /** Raw ordered task list (front first) and where it came from. */
     fun readRaw(): Pair<List<TaskRef>, TaskSource> {
@@ -246,7 +242,7 @@ class RecentTasksRepository(private val context: Context) {
         if (fromRecents) return true
         // moveTaskToFront(IApplicationThread, String callingPackage, int taskId, int flags, Bundle) —
         // signatures vary across ROMs: taskId in the first int slot, the caller's package (the shell
-        // identity Shizuku runs as; any package passes as root) in the String slot, 0/null elsewhere.
+        // identity Shizuku runs as, any package as root; this app as a system app) in the String slot, 0/null elsewhere.
         val moved = runCatching {
             val atm = activityTaskManager() ?: return@runCatching false
             val m = atm.javaClass.methods.firstOrNull {
@@ -255,7 +251,7 @@ class RecentTasksRepository(private val context: Context) {
             var firstInt = true
             val args = m.parameterTypes.map { p ->
                 if (p == Int::class.javaPrimitiveType) (if (firstInt) taskId else 0).also { firstInt = false }
-                else if (p == String::class.java) SHELL_PKG
+                else if (p == String::class.java) Privileged.callingPackage(context)
                 else nullFor(p)
             }.toTypedArray()
             m.invoke(atm, *args)
@@ -308,13 +304,13 @@ class RecentTasksRepository(private val context: Context) {
     private fun activityTaskManager(): Any? = atm ?: runCatching {
         val stub = Class.forName("android.app.IActivityTaskManager\$Stub")
         val asInterface: Method = stub.getMethod("asInterface", IBinder::class.java)
-        asInterface.invoke(null, ShizukuBinderWrapper(SystemServiceHelper.getSystemService("activity_task")))
+        asInterface.invoke(null, Privileged.service("activity_task") ?: return null)
     }.getOrNull()?.also { atm = it }
 
     private fun activityManager(): Any? = runCatching {
         val stub = Class.forName("android.app.IActivityManager\$Stub")
         val asInterface: Method = stub.getMethod("asInterface", IBinder::class.java)
-        asInterface.invoke(null, ShizukuBinderWrapper(SystemServiceHelper.getSystemService("activity")))
+        asInterface.invoke(null, Privileged.service("activity") ?: return null)
     }.getOrNull()
 
     private fun readField(obj: Any, name: String): Any? = runCatching {
@@ -334,25 +330,12 @@ class RecentTasksRepository(private val context: Context) {
         else -> null
     }
 
-    private fun execShell(command: String): String = runCatching {
-        val newProcess = Shizuku::class.java.getDeclaredMethod(
-            "newProcess", Array<String>::class.java, Array<String>::class.java, String::class.java
-        )
-        newProcess.isAccessible = true
-        // stderr dropped so a chatty command can't fill the pipe and deadlock waitFor()
-        val process = newProcess.invoke(null, arrayOf("sh", "-c", "$command 2>/dev/null"), null, null) as Process
-        BufferedReader(InputStreamReader(process.inputStream)).use { r ->
-            val text = r.readText()
-            process.waitFor()
-            text
-        }
-    }.getOrElse { Log.w(TAG, "shell failed: ${it.message}"); "" }
+    private fun execShell(command: String): String = Privileged.exec(command)
 
     companion object {
         const val TAG = "RTV"
         private const val RECENTS_MAX = 30       // the row shows 12; room for skipped and hidden apps
         private const val RECENT_IGNORE_UNAVAILABLE = 0x0002      // ActivityManager.RECENT_IGNORE_UNAVAILABLE
-        private const val SHELL_PKG = "com.android.shell"
         private const val SEED_MAX = 40
         // The binder proxy dies with Shizuku; dropped when its binder dies (see ShizukuManager).
         @Volatile private var atm: Any? = null
