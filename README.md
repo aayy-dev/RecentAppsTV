@@ -6,7 +6,8 @@ devices that ship with **no system "recent apps" screen**. It opens as a translu
 with the **remote's arrow keys only**.
 
 The task list is read through **[Shizuku](https://shizuku.rikka.app/)** (no root needed), with usage access as a
-backup when Shizuku isn't running.
+backup when Shizuku isn't running. On a device rooted with Magisk it can instead be installed as a
+**[Magisk module](#root-magisk-module-instead-of-shizuku)**: the same app as a privileged system app, no Shizuku.
 
 ![Recent apps overlay](docs/screenshots/overlay.jpg)
 
@@ -220,16 +221,53 @@ Pressing the same button again closes the list. It also appears as a normal app 
 
 Upgrading from 1.0 keeps your settings. Reinstalling may ask for the Shizuku permission again.
 
+## Root: Magisk module instead of Shizuku
+
+On a TV rooted with [Magisk](https://github.com/topjohnwu/Magisk), the module installs the same APK as a privileged
+system app, so nothing has to be started after a reboot and the Shizuku screen never shows. Everything else (the row,
+pins, settings, the remote keys) is the same app.
+
+1. Uninstall the normal app first if it is installed (`adb uninstall com.websnake.recentstv`): the module refuses to
+   install next to it.
+2. Install `RecentAppsTV-magisk-<version>.zip` and reboot:
+
+```sh
+adb push RecentAppsTV-magisk-*.zip /data/local/tmp/recentappstv.zip
+adb shell su -c 'magisk --install-module /data/local/tmp/recentappstv.zip'
+adb shell rm /data/local/tmp/recentappstv.zip
+adb reboot
+```
+
+   (or Magisk → Modules → *Install from storage*, where the device has a file picker).
+3. Map a remote button to it as above.
+
+Uninstall: remove it in Magisk → Modules, or `adb shell su -c 'touch /data/adb/modules/recentappstv/remove'`, then reboot.
+If a boot never completes three times in a row, the module disables itself.
+
+What the module adds (`magisk/`):
+
+| Part | Why |
+|---|---|
+| `system/priv-app/RecentAppsTV` | the release APK as a privileged system app |
+| privapp allowlist | `REAL_GET_TASKS`, `START_TASKS_FROM_RECENTS`, `FORCE_STOP_PACKAGES`, `DUMP`, `PACKAGE_USAGE_STATS` |
+| framework overlay | `config_recentsComponentName` → the app (a stub activity), which gives it the recents role: `REMOVE_TASKS`, `MANAGE_ACTIVITY_TASKS`. TV builds leave this slot empty |
+| `service.sh` | allows the usage-access app-op at each boot (Shizuku did this before) |
+
+At start the app checks whether it holds `REAL_GET_TASKS`; if so it calls the system services directly and runs
+`dumpsys` as itself (`shizuku/Privileged.kt`), else it uses Shizuku as before. The approach (priv-app + recents-role
+overlay) follows [TV Recents](https://github.com/jcgw22/android-tv-recents).
+
 ## Requirements
 
 - Android TV / Google TV, Android 7.0+ (minSdk 24)
 - Shizuku running, with access granted to this app (without it, after a reboot, the row still works from the last list
-  and usage access, but apps open fresh and removals wait for Shizuku)
+  and usage access, but apps open fresh and removals wait for Shizuku) — **or** root with Magisk and the module above
 
 ## How it works
 
 All privileged work sits in `RecentTasksRepository`, through the Shizuku shell identity
-(`REAL_GET_TASKS`, `START_TASKS_FROM_RECENTS`, `MANAGE_ACTIVITY_TASKS`, `REMOVE_TASKS`, `FORCE_STOP_PACKAGES` — all held by shell):
+(`REAL_GET_TASKS`, `START_TASKS_FROM_RECENTS`, `MANAGE_ACTIVITY_TASKS`, `REMOVE_TASKS`, `FORCE_STOP_PACKAGES` — all held by shell),
+or, installed by the Magisk module, the app's own identity holding the same permissions (`shizuku/Privileged.kt`):
 
 | Action | How |
 |---|---|
@@ -276,6 +314,9 @@ python3 tools/flow/flowmap.py check --twice     # the full gate (runs the tests 
 ```bash
 ./gradlew :app:assembleRelease     # JDK 17+, Android SDK 35
 # → app/build/outputs/apk/release/app-release.apk
+
+./gradlew :magisk:moduleZip        # the same APK wrapped as a Magisk module
+# → magisk/build/outputs/RecentAppsTV-magisk-<version>.zip
 ```
 
 ## Credits

@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Root without Shizuku: `./gradlew :magisk:moduleZip` wraps the release APK in a Magisk module that installs it as a
+  privileged system app (privapp allowlist + a framework overlay naming it the system recents component, for
+  `REMOVE_TASKS`). The app sees it holds `REAL_GET_TASKS` and then calls the system services directly and runs
+  `dumpsys` as itself (`shizuku/Privileged.kt`); a normal install still uses Shizuku, unchanged.
+
 ## 1.10.1 — 2026-11-09
 
 - The balloon's header no longer shows "Running" / "Not running" under the app name; only "Pinned" for a pinned app.

@@ -15,6 +15,15 @@ Release build on a real device by D-pad only (`adb shell input keyevent`): open,
 hold OK menu (each option), Kill all → Empty, Settings (every row), Exceptions (toggle), Back, Shizuku stopped → gate
 → Shizuku started in **adb/shell mode** (the TV's identity) → list, remove and switch work.
 
+The Magisk module adds, after a reboot: `dumpsys package com.websnake.recentstv` shows the app `PRIVILEGED` with all
+seven permissions granted, `dumpsys activity recents` shows `mRecentsComponent=…/.SystemRecentsActivity`, the overlay's
+task is `type=standard`, and logcat has `RTV: privileged mode: SYSTEM` and `mode=STORED`; then open, switch, ↓ ↓ remove
+and Kill all.
+
+Magisk module, 2026-11-19, on the `playtv` AVD (Google TV, Android 16, x86_64, Magisk 30.6): all of the above; switch
+→ `startActivityFromRecents(123)=2`; ↓ ↓ → `removeTask(124)=true` and the app force-stopped; Kill all → 7 tasks removed,
+only the launcher / system tasks left; no SELinux or privapp denials in logcat. 184 JVM tests pass.
+
 1.1 was run on a Samsung Galaxy A50 (Android 11, 2340×1080, Shizuku 13.6 in root and in shell mode) on 2026-11-08.
 Found and fixed on the way: font drawn at weight 200; OK eaten after the hold menu (also in 1.0); OK during a
 fly-off switched to the app being removed; the context menu spanned the whole phone screen; full stops jumped to the
