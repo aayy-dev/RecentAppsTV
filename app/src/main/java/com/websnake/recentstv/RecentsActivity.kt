@@ -44,7 +44,6 @@ import com.websnake.recentstv.logic.Effect
 import com.websnake.recentstv.logic.KeyIn
 import com.websnake.recentstv.logic.OvState
 import com.websnake.recentstv.logic.Overlay
-import com.websnake.recentstv.logic.PinPosition
 import com.websnake.recentstv.logic.Scene
 import com.websnake.recentstv.logic.RowMode
 import com.websnake.recentstv.logic.Seen
@@ -297,7 +296,7 @@ class RecentsActivity : ComponentActivity() {
             loadId++
             st = Overlay.loaded(
                 st, r.all.map { TaskRef(it.taskId ?: -1, it.packageName) }, r.pins.map { it.packageName },
-                s.showKillAll, s.pinPosition == PinPosition.RIGHT,
+                s.showKillAll,
                 current = if (ready) repo.current else limitedCurrent,
             )
             contentOn = true

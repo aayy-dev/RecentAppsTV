@@ -58,6 +58,7 @@ import com.websnake.recentstv.logic.Item
 import com.websnake.recentstv.logic.OvState
 import com.websnake.recentstv.logic.PEEK_NONE
 import com.websnake.recentstv.logic.PEEK_UP
+import com.websnake.recentstv.logic.RowId
 import com.websnake.recentstv.logic.Scene
 import com.websnake.recentstv.logic.Settings
 import com.websnake.recentstv.logic.SettingsCodec
@@ -73,28 +74,41 @@ import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 private val GAP = 20.dp
-private val PIN_GAP = 16.dp
-private val GROUP_PAD = 17.dp
+private val PIN_GAP = 18.dp
 private val EDGE = 38.dp
 private val PEEK = 23.dp
 private val FLY = 350.dp
 private val LABEL_GAP = 15.dp         // design: 30px → 40px below the card as it fades in
-private val MENU_SHIFT = 97.dp        // row slides down while the long-press menu is open
+private val MENU_SHIFT = 97.dp        // the rows slide down while the hold-OK menu is open
 private val EMPTY_SLOT_W = 320.dp
-private const val SETTINGS_TILE = 0.86f   // ⚙ tile width, × card size (in the row, when Kill All isn't shown)
-private val GEAR_H = 38.dp                 // ⚙ Settings button above Kill All
-private val GEAR_GAP = 16.dp
-private val MENU_EST_H = 240.dp        // long-press menu height (header + 4 rows)
+private val GEAR_H = 38.dp            // ⚙ Settings button at the top
+private val MENU_EST_H = 240.dp       // hold-OK menu height (header + 4 rows)
+private val HEADER_BOTTOM = 100.dp    // below the title and the count line
+private val PINS_TITLE = 22.dp        // the "Pinned" line above the pins row
+private val ROW_GAP = 78.dp           // pins row → recents row: room for the focused pin's name
 private const val DIMMED = 0.32f
 
-/** One place in the row. [item] null = the "No recent apps" placeholder (not focusable). */
-private class Slot(val key: String, val item: Item?, val logical: Int, val width: Dp, val grouped: Boolean)
+/** One place in a row. [item] null = the "No recent apps" placeholder (not focusable). */
+private class Slot(val key: String, val item: Item?, val logical: Int, val width: Dp)
+
+/** A row's layout: slots in visual order (left → right; logical order is right → left), their strip, the focused slot. */
+private class RowLayout(val slots: List<Slot>, val strip: com.websnake.recentstv.logic.StripLayout, val focusVisual: Int)
+
+@Composable
+private fun rowLayout(items: List<Item>, focus: Int, width: (Item) -> Dp, gap: Dp): RowLayout {
+    val density = LocalDensity.current
+    return remember(items, focus, density, gap) {
+        val slots = items.mapIndexed { i, it -> Slot(it.key, it, i, width(it)) }.asReversed().toList()
+        val strip = with(density) { Geometry.layout(slots.map { it.width.toPx() }, gap.toPx(), EDGE.toPx()) }
+        RowLayout(slots, strip, slots.indexOfFirst { it.logical == focus })
+    }
+}
 
 /**
- * Surface 1 — the recent-apps row (RTL: Kill All far right, newest next to it, pins at
- * the chosen end). Positions are computed (Geometry), not measured, and every moving
- * value is read in the draw phase (graphicsLayer / drawBehind), so a focus move or a
- * dismiss animates without recomposing or re-laying-out the row.
+ * Surface 1 — the recents overlay (magisk-root): the pinned apps on their own row at the top, the recent apps on the
+ * row below (RTL: Kill all far right, newest next to it), the ⚙ Settings button above both. Positions are computed
+ * (Geometry), not measured, and every moving value is read in the draw phase (graphicsLayer / drawBehind), so a focus
+ * move or a removal animates without recomposing or re-laying-out the rows.
  *
  * [loadId] changes on every fresh load: positions snap instead of sliding in.
  */
@@ -109,177 +123,166 @@ fun RecentsOverlay(
 ) = BoxWithConstraints(Modifier.fillMaxSize()) {
     val density = LocalDensity.current
     val viewportW = constraints.maxWidth.toFloat()
+    val viewportH = constraints.maxHeight.toFloat()
     val cardDp = settings.size.dp
     val pinDp = cardDp * settings.pinSize.factor
     val cardShape = settings.shape.shape()
     val menuOpen = state.ctxPkg != null
     val selecting = state.selecting
+    val hasPins = state.pins.isNotEmpty()
+
+    // ── where the rows sit (offsets from the vertical centre, px) ──
+    val pinsY: Float
+    val tasksY: Float
+    with(density) {
+        val pinHalf = (pinDp * Motion.FOCUS_SCALE / 2f).toPx()
+        val cardHalf = (cardDp * Motion.FOCUS_SCALE / 2f).toPx()
+        if (hasPins) {
+            val pinsCenter = (HEADER_BOTTOM + PINS_TITLE).toPx() + pinHalf
+            pinsY = pinsCenter - viewportH / 2f
+            tasksY = maxOf(32.dp.toPx(), pinsCenter + pinHalf + ROW_GAP.toPx() + cardHalf - viewportH / 2f)
+        } else {
+            pinsY = 0f
+            tasksY = 0f
+        }
+    }
+    fun rowY(r: RowId) = if (r == RowId.PINS) pinsY else tasksY
+    fun rowCardDp(r: RowId) = if (r == RowId.PINS) pinDp else cardDp
 
     // everything but the chosen card fades out when an app is chosen
     val chrome = animateFloatAsState(if (selecting != null) 0f else 1f, tween(Motion.CHROME_FADE_MS), label = "chrome")
-    // the row slides down 97dp (design); on a short screen far enough for the whole menu to fit above it
+    // the rows slide down while the menu is open: far enough for the whole menu to fit above its card
     val shiftOpen = with(density) {
-        val half = constraints.maxHeight / 2f
-        val cardHalf = (cardDp * Motion.FOCUS_SCALE / 2f).toPx()
-        val need = (MENU_EST_H + 31.dp + 8.dp).toPx() - (half - cardHalf)
-        maxOf(MENU_SHIFT.toPx(), need).coerceAtMost(half - cardHalf - 8.dp.toPx())
+        val half = viewportH / 2f
+        val cardTop = half + rowY(state.ctxRow) - (rowCardDp(state.ctxRow) * Motion.FOCUS_SCALE / 2f).toPx()
+        maxOf(MENU_SHIFT.toPx(), (MENU_EST_H + 39.dp).toPx() - cardTop)
     }
     val shift = animateFloatAsState(
         if (menuOpen) shiftOpen else 0f,
         tween(Motion.MENU_SHIFT_MS, easing = Motion.standard), label = "shift",
     )
 
-    // ── slots, visual order left → right (logical order is right → left) ──
-    val slots: List<Slot> = remember(state.items, state.emptySlot, state.pinRight, cardDp, pinDp) {
-        val logical = state.items.mapIndexed { i, it ->
-            val w = when (it) {
-                Item.Settings -> cardDp * SETTINGS_TILE; Item.KillAll -> cardDp * 1.34f; is Item.Pin -> pinDp; is Item.Task -> cardDp
-            }
-            Slot(it.key, it, i, w, it is Item.Pin)
-        }.toMutableList()
-        if (state.emptySlot) {
-            val e = Slot("#empty", null, -1, EMPTY_SLOT_W, false)
-            if (state.pinRight) logical.add(e) else logical.add(1, e)     // after the ⚙ tile
-        }
-        logical.asReversed().toList()
-    }
-    val strip = remember(slots, density) {
-        with(density) {
-            Geometry.layout(
-                slots.map { it.width.toPx() },
-                Geometry.groupGaps(slots.map { it.grouped }, GAP.toPx(), PIN_GAP.toPx(), GROUP_PAD.toPx()),
-                (EDGE + GROUP_PAD).toPx(),
-            )
-        }
-    }
-    val focusVisual = slots.indexOfFirst { it.logical == state.focus && it.item != null }
-    val targetTx = Geometry.stripOffset(viewportW, strip, focusVisual)
-    val tx = remember(loadId) { Animatable(targetTx) }
-    LaunchedEffect(targetTx, loadId) {
-        if (tx.targetValue != targetTx) tx.animateTo(targetTx, Motion.glide())
-    }
+    val tasksRow = rowLayout(state.items, state.focus, { if (it == Item.KillAll) cardDp * 1.34f else cardDp }, GAP)
+    val pinsRow = rowLayout(state.pins, state.pinFocus, { pinDp }, PIN_GAP)
 
-    // ── header: centred title with the count line under it ──
+    // ── header: centred title with the count line under it; the ⚙ at the top right ──
     Column(
         Modifier.fillMaxWidth().padding(top = 36.dp).graphicsLayer { alpha = chrome.value },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text("Recent apps", style = Type.title, color = Tokens.text)
         val count = SettingsCodec.countLabel(state.tasks.size, state.pins.size)
-        // 1.8: with Kill all centred, the ⚙ above it reaches up to this line on a short screen: it steps aside then
-        val countA by animateFloatAsState(if (state.gearFocused) 0f else 1f, tween(160), label = "count")
-        if (count.isNotEmpty()) Text(
-            count, style = Type.small, color = Tokens.textDim,
-            modifier = Modifier.padding(top = 6.dp).graphicsLayer { alpha = countA },
-        )
+        if (count.isNotEmpty()) Text(count, style = Type.small, color = Tokens.textDim, modifier = Modifier.padding(top = 6.dp))
     }
+    val gearDim = animateFloatAsState(if (menuOpen) DIMMED else 1f, tween(200), label = "gearDim")
+    Box(
+        Modifier.align(Alignment.TopEnd).padding(top = 40.dp, end = 48.dp)
+            .graphicsLayer { alpha = gearDim.value * chrome.value },
+    ) { SettingsButton(state.gearFocused, 150.dp) }
 
-    // ── pinned group frame + its "Pinned" label ──
-    val pinVis = slots.indices.filter { slots[it].grouped }
-    if (pinVis.isNotEmpty()) {
-        val l = strip.lefts[pinVis.first()] - with(density) { GROUP_PAD.toPx() }
-        val r = strip.lefts[pinVis.last()] + strip.widths[pinVis.last()] + with(density) { GROUP_PAD.toPx() }
-        PinnedFrame(
-            left = l, right = r, loadId = loadId, tx = { tx.value }, shift = { shift.value },
-            pinDp = pinDp, viewportW = viewportW,
-            alpha = {
-                val chosenInside = selecting != null && slots.any { it.grouped && it.key == selecting }
-                when {
-                    selecting != null -> if (chosenInside) 0f else chrome.value
-                    menuOpen && state.ctxItem !is Item.Pin -> DIMMED
-                    else -> 1f
-                }
+    // ── the "Pinned" title over the pins row ──
+    if (hasPins) {
+        val pinTitleA = animateFloatAsState(
+            if (menuOpen && state.ctxRow != RowId.PINS) DIMMED else 1f, tween(200), label = "pinTitle",
+        )
+        Row(
+            Modifier.align(Alignment.Center).graphicsLayer {
+                alpha = pinTitleA.value * chrome.value
+                translationY = (pinsY - (pinDp * Motion.FOCUS_SCALE / 2f).toPx() - 14.dp.toPx() + shift.value).roundToInt().toFloat()
             },
-        )
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Image(painterResource(R.drawable.ic_pin), null, colorFilter = ColorFilter.tint(Tokens.textDim), modifier = Modifier.size(13.dp))
+            Text("Pinned", style = Type.small.copy(fontWeight = FontWeight.Bold), color = Tokens.textDim, maxLines = 1)
+        }
     }
 
-    // ── the row ──
-    slots.forEachIndexed { vi, slot ->
-        key(slot.key) {
-            val left = strip.lefts[vi]
-            val leftAnim = remember(loadId) { Animatable(left) }
-            LaunchedEffect(left) {   // a neighbour was removed or moved: slide over
-                if (leftAnim.targetValue != left) leftAnim.animateTo(left, Motion.glide())
-            }
-            val item = slot.item
-            val focused = item != null && state.scene == Scene.OVERLAY && slot.logical == state.focus && !state.gearFocused
-            val chosen = selecting != null && slot.key == selecting
-            val dim = animateFloatAsState(
-                if (menuOpen && slot.key != state.ctxPkg) DIMMED else 1f, tween(200), label = "dim",
-            )
-            Box(
-                Modifier
-                    .align(Alignment.CenterStart)
-                    .graphicsLayer {
-                        // whole pixels: text and icon move together, no sub-pixel shimmer
-                        translationX = (leftAnim.value + tx.value).roundToInt().toFloat()
-                        translationY = shift.value.roundToInt().toFloat()
-                        alpha = dim.value * (if (chosen) 1f else chrome.value)
-                    },
-            ) {
-                when (item) {
-                    null -> EmptySlotBox(cardDp)
-                    Item.Settings -> SettingsTile(focused, cardDp, cardShape)
-                    Item.KillAll -> KillAllTile(focused, cardDp, cardShape, state.killing)
-                    is Item.Task, is Item.Pin -> {
-                        val task = info[slot.key]
-                        if (task != null) AppCard(
-                            task = task,
-                            pinned = item is Item.Pin,
-                            running = item !is Item.Pin || (item as Item.Pin).running,
-                            focused = focused,
-                            pressing = focused && state.pressing,
-                            peek = if (focused) state.peek else PEEK_NONE,
-                            flying = state.flying == slot.key,
-                            flyDir = state.flyDir,
-                            killing = state.killing && item is Item.Task,
-                            staggerIndex = slot.logical,
-                            labelOn = focused && state.peek == PEEK_NONE && state.flying == null && !state.killing &&
-                                selecting == null && !menuOpen,
-                            cardDp = slot.width, cardShape = cardShape,
-                            onFlyComplete = { onFlyComplete(slot.key) },
-                        )
+    @Composable
+    fun DrawRow(r: RowId, layout: RowLayout) {
+        val targetTx = Geometry.stripOffset(viewportW, layout.strip, layout.focusVisual)
+        val tx = remember(loadId, r) { Animatable(targetTx) }
+        LaunchedEffect(targetTx, loadId) {
+            if (tx.targetValue != targetTx) tx.animateTo(targetTx, Motion.glide())
+        }
+        val y = rowY(r)
+        layout.slots.forEachIndexed { vi, slot ->
+            key(r, slot.key) {
+                val left = layout.strip.lefts[vi]
+                val leftAnim = remember(loadId) { Animatable(left) }
+                LaunchedEffect(left) {   // a neighbour was removed or moved: slide over
+                    if (leftAnim.targetValue != left) leftAnim.animateTo(left, Motion.glide())
+                }
+                val item = slot.item
+                val focused = state.focusIn(r) && slot.logical == (if (r == RowId.PINS) state.pinFocus else state.focus)
+                val chosen = selecting != null && slot.key == selecting && state.selectRow == r
+                val isCtx = menuOpen && state.ctxRow == r && slot.key == state.ctxPkg
+                val dim = animateFloatAsState(if (menuOpen && !isCtx) DIMMED else 1f, tween(200), label = "dim")
+                Box(
+                    Modifier
+                        .align(Alignment.CenterStart)
+                        .graphicsLayer {
+                            // whole pixels: text and icon move together, no sub-pixel shimmer
+                            translationX = (leftAnim.value + tx.value).roundToInt().toFloat()
+                            translationY = (y + shift.value).roundToInt().toFloat()
+                            alpha = dim.value * (if (chosen) 1f else chrome.value)
+                        },
+                ) {
+                    when (item) {
+                        null -> {}
+                        Item.KillAll -> KillAllTile(focused, cardDp, cardShape, state.killing)
+                        Item.Settings -> {}
+                        is Item.Task, is Item.Pin -> {
+                            val task = info[slot.key]
+                            if (task != null) AppCard(
+                                task = task,
+                                pinned = r == RowId.TASKS && slot.key in state.pinned,
+                                running = item !is Item.Pin || item.running,
+                                showRunning = r == RowId.PINS,
+                                focused = focused,
+                                pressing = focused && state.pressing,
+                                peek = if (focused && r == RowId.TASKS) state.peek else PEEK_NONE,
+                                flying = state.flying == slot.key && state.flyRow == r,
+                                flyDir = state.flyDir,
+                                killing = state.killing && r == RowId.TASKS,
+                                staggerIndex = slot.logical,
+                                labelOn = focused && state.peek == PEEK_NONE && state.flying == null && !state.killing &&
+                                    selecting == null && !menuOpen,
+                                cardDp = slot.width, cardShape = cardShape,
+                                onFlyComplete = { onFlyComplete(slot.key) },
+                            )
+                        }
                     }
                 }
             }
         }
     }
 
-    // ── the ⚙ Settings button above Kill All (↑ from Kill All) ──
-    val killVisual = slots.indexOfFirst { it.item == Item.KillAll }
-    if (killVisual >= 0) {
-        val killLeft = strip.lefts[killVisual]
-        val gearLeft = remember(loadId) { Animatable(killLeft) }
-        LaunchedEffect(killLeft) {
-            if (gearLeft.targetValue != killLeft) gearLeft.animateTo(killLeft, Motion.glide())
-        }
-        // also out of the way while the "Press again to remove" pill is up: next to Kill all they overlapped (A50)
-        val gone = animateFloatAsState(if (state.killing || state.peek != PEEK_NONE) 0f else 1f, tween(200), label = "gearGone")
-        val dim = animateFloatAsState(if (menuOpen) DIMMED else 1f, tween(200), label = "gearDim")
-        val lift = with(density) { (cardDp * 1.18f * Motion.KILL_FOCUS_SCALE / 2f + GEAR_GAP + GEAR_H / 2f).toPx() }
-        Box(
-            Modifier
-                .align(Alignment.CenterStart)
-                .graphicsLayer {
-                    translationX = (gearLeft.value + tx.value).roundToInt().toFloat()
-                    translationY = (shift.value - lift).roundToInt().toFloat()
-                    alpha = gone.value * dim.value * chrome.value
-                },
-        ) { SettingsButton(state.gearFocused, cardDp * 1.34f) }
-    }
+    if (hasPins) DrawRow(RowId.PINS, pinsRow)
+    DrawRow(RowId.TASKS, tasksRow)
+    if (state.emptySlot) Box(
+        Modifier.align(Alignment.Center).graphicsLayer {
+            translationY = (tasksY + shift.value).roundToInt().toFloat()
+            alpha = chrome.value * (if (menuOpen) DIMMED else 1f)
+        },
+    ) { EmptySlotBox(cardDp) }
 
-    // ── long-press menu, above the target card ──
+    // ── hold-OK menu, above the target card ──
     val ctxTask = state.ctxPkg?.let { info[it] }
-    val ctxVisual = slots.indexOfFirst { it.key == state.ctxPkg }
+    val ctxLayout = if (state.ctxRow == RowId.PINS) pinsRow else tasksRow
+    val ctxVisual = ctxLayout.slots.indexOfFirst { it.key == state.ctxPkg }
     ContextMenu(
         task = ctxTask,
-        pinned = state.ctxItem is Item.Pin,
+        pinned = state.ctxPkg != null && state.ctxPkg in state.pinned,
         running = when (val it = state.ctxItem) { is Item.Pin -> it.running; is Item.Task -> true; else -> false },
         selected = state.ctxSel,
-        anchorX = { if (ctxVisual >= 0) strip.center(ctxVisual) + tx.value else viewportW / 2f },
+        anchorX = {
+            if (ctxVisual >= 0) ctxLayout.strip.center(ctxVisual) + Geometry.stripOffset(viewportW, ctxLayout.strip, ctxLayout.focusVisual)
+            else viewportW / 2f
+        },
         anchorTop = {
-            val w = if (ctxVisual >= 0) slots[ctxVisual].width else cardDp
-            constraints.maxHeight / 2f + shift.value - with(density) { (w * Motion.FOCUS_SCALE / 2f).toPx() }
+            val w = if (ctxVisual >= 0) ctxLayout.slots[ctxVisual].width else cardDp
+            viewportH / 2f + rowY(state.ctxRow) + shift.value - with(density) { (w * Motion.FOCUS_SCALE / 2f).toPx() }
         },
         viewportW = viewportW,
     )
@@ -291,10 +294,9 @@ fun RecentsOverlay(
         horizontalArrangement = Arrangement.spacedBy(24.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        KeyHint("OK", "Open"); KeyHint("↑ / Hold OK", "Options"); KeyHint("↓ ↓", "Remove"); KeyHint("Back", "Close")
+        KeyHint("OK", "Open"); KeyHint("Hold OK", "Options"); KeyHint("↓ ↓", "Remove"); KeyHint("Back", "Close")
     }
-    // 1.7: Shizuku is off (after a TV reboot): the row comes from the last list + usage access. Above the key
-    // hints, clear of the ⚙ button (on a short screen it overlapped the header)
+    // Shizuku is off (after a reboot, Shizuku build only): the row comes from the last list + usage access
     if (limited) Text(
         "Shizuku is off · apps open from their start screen · removals wait for Shizuku",
         style = Type.small, color = LIMITED_TINT, maxLines = 1,
@@ -304,11 +306,12 @@ fun RecentsOverlay(
     // ── select: the chosen tile grows to full screen in the app's colour ──
     if (selecting != null) {
         val t = info[selecting]
-        val vi = slots.indexOfFirst { it.key == selecting }
+        val layout = if (state.selectRow == RowId.PINS) pinsRow else tasksRow
+        val vi = layout.slots.indexOfFirst { it.key == selecting }
         if (t != null && vi >= 0) {
-            val w = with(density) { (slots[vi].width * Motion.PRESS_SCALE).toPx() }
-            val cx = strip.center(vi) + tx.value
-            val cy = constraints.maxHeight / 2f + shift.value
+            val w = with(density) { (layout.slots[vi].width * Motion.PRESS_SCALE).toPx() }
+            val cx = layout.strip.center(vi) + Geometry.stripOffset(viewportW, layout.strip, layout.focusVisual)
+            val cy = viewportH / 2f + rowY(state.selectRow) + shift.value
             SelectZoom(
                 task = t,
                 from = androidx.compose.ui.geometry.Rect(cx - w / 2f, cy - w / 2f, cx + w / 2f, cy + w / 2f),
@@ -319,7 +322,7 @@ fun RecentsOverlay(
                         com.websnake.recentstv.logic.CardShape.SQUARE -> with(density) { 8.dp.toPx() } * Motion.PRESS_SCALE
                     }
                 },
-                iconDp = slots[vi].width * 0.66f,
+                iconDp = layout.slots[vi].width * 0.66f,
             )
         }
     }
@@ -339,45 +342,6 @@ private fun KeyHint(key: String, label: String) {
                 .padding(horizontal = 7.dp, vertical = 3.dp),
         )
         Text(label, style = Type.small, color = Tokens.textDim, maxLines = 1)
-    }
-}
-
-/** The faint rounded frame around the pinned apps, with "Pinned" above it. Moves with the strip. */
-@Composable
-private fun PinnedFrame(
-    left: Float, right: Float, loadId: Int, tx: () -> Float, shift: () -> Float,
-    pinDp: Dp, viewportW: Float, alpha: () -> Float,
-) {
-    val density = LocalDensity.current
-    val l = remember(loadId) { Animatable(left) }
-    val r = remember(loadId) { Animatable(right) }
-    LaunchedEffect(left) { if (l.targetValue != left) l.animateTo(left, Motion.glide()) }
-    LaunchedEffect(right) { if (r.targetValue != right) r.animateTo(right, Motion.glide()) }
-    val h = with(density) { (pinDp + GROUP_PAD * 2).toPx() }
-    Box(
-        Modifier.fillMaxSize().drawBehind {
-            val a = alpha()
-            if (a <= 0.01f) return@drawBehind
-            val x = l.value + tx()
-            val top = size.height / 2f - h / 2f + shift()
-            val cr = CornerRadius(22.dp.toPx())
-            drawRoundRect(Color.White.copy(alpha = 0.035f * a), Offset(x, top), Size(r.value - l.value, h), cr)
-            drawRoundRect(Color.White.copy(alpha = 0.07f * a), Offset(x, top), Size(r.value - l.value, h), cr, style = Stroke(1.dp.toPx()))
-        },
-    )
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Row(
-            Modifier.graphicsLayer {
-                this.alpha = alpha()
-                translationX = ((l.value + r.value) / 2f + tx() - viewportW / 2f).roundToInt().toFloat()
-                translationY = (-h / 2f - 8.dp.toPx() - size.height / 2f + shift()).roundToInt().toFloat()
-            },
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Image(painterResource(R.drawable.ic_pin), null, colorFilter = ColorFilter.tint(Tokens.textDim), modifier = Modifier.size(13.dp))
-            Text("Pinned", style = Type.small.copy(fontWeight = FontWeight.Bold), color = Tokens.textDim, maxLines = 1)
-        }
     }
 }
 
@@ -409,6 +373,7 @@ private fun AppCard(
     task: RecentTask,
     pinned: Boolean,
     running: Boolean,
+    showRunning: Boolean,
     focused: Boolean,
     pressing: Boolean,
     peek: Int,
@@ -551,8 +516,9 @@ private fun AppCard(
                     Image(painterResource(R.drawable.ic_pin), null, colorFilter = ColorFilter.tint(Tokens.text), modifier = Modifier.size(11.dp))
                 }
             }
-            // running dot under an unfocused pinned app that is also running
-            if (running) Box(
+        }
+        // running dot under an unfocused pin (pins row) whose app is also running
+        if (showRunning && running) Box(
                 Modifier
                     .graphicsLayer {
                         translationY = (cardDp * Motion.IDLE_SCALE / 2f + 11.dp).toPx()
@@ -562,7 +528,6 @@ private fun AppCard(
                     .clip(RoundedCornerShape(percent = 50))
                     .background(Tokens.text),
             )
-        }
         // name + category under the focused card
         if (labelUsed) Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -613,7 +578,7 @@ private fun PeekHint(peek: Int, cardDp: Dp) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(if (lastDir == PEEK_UP) "▲" else "▼", style = Type.small, color = accent.base)
-            Text("Press again to remove", style = Type.small, color = accent.base, maxLines = 1)
+            Text("↓ or OK removes · ↑ keeps it", style = Type.small, color = accent.base, maxLines = 1)
         }
     }
 }
@@ -668,51 +633,7 @@ private fun KillAllTile(focused: Boolean, cardDp: Dp, cardShape: Shape, killing:
     }
 }
 
-/** The ⚙ tile at the right end of the row: the way into Settings. Neutral until focused. */
-@Composable
-private fun SettingsTile(focused: Boolean, cardDp: Dp, cardShape: Shape) {
-    val accent = LocalAccent.current
-    val std = tween<Float>(Motion.FOCUS_MS, easing = Motion.standard)
-    val scale = animateFloatAsState(if (focused) Motion.KILL_FOCUS_SCALE else 1f, Motion.glide(), label = "gscale")
-    val f = animateFloatAsState(if (focused) 1f else 0f, std, label = "gfocus")
-    val glyph by animateColorAsState(if (focused) accent.onDark else Tokens.textDim, tween(Motion.FOCUS_MS), label = "gglyph")
-    val w = cardDp * SETTINGS_TILE
-
-    Box(Modifier.size(w), contentAlignment = Alignment.Center) {
-        Box(
-            Modifier
-                .requiredSize(w * 1.5f)
-                .drawBehind {
-                    if (f.value > 0.01f) drawCircle(
-                        Brush.radialGradient(listOf(accent.glow.copy(alpha = accent.glow.alpha * f.value), Color.Transparent)),
-                        radius = size.minDimension / 2f * scale.value,
-                    )
-                },
-        )
-        Column(
-            Modifier
-                .size(w)
-                .graphicsLayer { scaleX = scale.value; scaleY = scale.value; this.shape = cardShape; clip = true }
-                .drawBehind {
-                    val outline = cardShape.createOutline(size, layoutDirection, this)
-                    drawOutline(outline, lerp(Tokens.surface2, accent.base, f.value))
-                    drawOutline(outline, lerp(Tokens.line, accent.base, f.value), style = Stroke(2.dp.toPx()))
-                },
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
-        ) {
-            Image(
-                painter = painterResource(R.drawable.ic_settings),
-                contentDescription = "Settings",
-                colorFilter = ColorFilter.tint(glyph),
-                modifier = Modifier.size(w * 0.38f),
-            )
-            Text("Settings", style = Type.small.copy(fontWeight = FontWeight.Bold), color = glyph, maxLines = 1, softWrap = false)
-        }
-    }
-}
-
-/** The ⚙ Settings button above Kill All: a pill as wide as Kill All. Neutral until focused (↑ from Kill All). */
+/** The ⚙ Settings button at the top of the overlay. Neutral until focused (↑ from the top row). */
 @Composable
 private fun SettingsButton(focused: Boolean, width: Dp) {
     val accent = LocalAccent.current

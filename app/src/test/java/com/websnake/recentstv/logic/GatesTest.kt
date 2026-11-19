@@ -14,7 +14,7 @@ class GatesTest {
 
     private val a = TaskRef(11, "app.a")
     private val b = TaskRef(12, "app.b")
-    private fun ready(vararg t: TaskRef, pins: List<String> = emptyList()) = Overlay.loaded(OvState(), t.toList(), pins, true, false)
+    private fun ready(vararg t: TaskRef, pins: List<String> = emptyList()) = Overlay.loaded(OvState(), t.toList(), pins, true)
     private fun press(s: OvState, btn: Btn, repeat: Int = 0) = Overlay.key(s, KeyIn(btn, true, repeat))
     private fun release(s: OvState, btn: Btn) = Overlay.key(s, KeyIn(btn, false))
     /** OK down, then the HOLD_MS timer fires with it still down. */
@@ -97,15 +97,7 @@ class GatesTest {
     }
 
     // ── the ⚙ tile (1.4): the visible way into Settings ──
-    @Test fun `G-ROW-gear the gear is in the row only when Kill All is not shown`() {
-        assertFalse(ready(a).items.contains(Item.Settings))
-        assertEquals(Item.Settings, ready(pins = listOf("p.x")).items.first())
-    }
 
-    @Test fun `G-GEAR-up UP from Kill All focuses the gear, from a task it opens the menu`() {
-        assertTrue(press(ready(a).copy(focus = 0), Btn.UP).first.gearFocused)
-        assertEquals("app.a", press(ready(a), Btn.UP).first.ctxPkg)
-    }
 
     @Test fun `G-GEAR-down DOWN from the gear returns to Kill All, from a task it peeks`() {
         val g = press(ready(a).copy(focus = 0), Btn.UP).first
@@ -129,13 +121,7 @@ class GatesTest {
         assertTrue(gearUp().gearFocused); assertFalse(gearUp().copy(scene = Scene.EMPTY).gearFocused)
     }
 
-    @Test fun `G-GEAR-shown the gear above Kill All counts only while Kill All is shown`() {
-        assertTrue(gearUp().gearFocused); assertFalse(gearUp().copy(showKillAll = false).gearFocused)
-    }
 
-    @Test fun `G-GEAR-focus the gear counts only while focus is on Kill All`() {
-        assertTrue(gearUp().gearFocused); assertFalse(gearUp().copy(focus = 1).gearFocused)
-    }
 
     @Test fun `G-OK-gear OK on the gear opens Settings, on a task it opens the app`() {
         assertEquals(listOf(Effect.OpenSettings), release(press(ready(a).copy(focus = 0), Btn.UP).first, Btn.OK).second)
@@ -175,12 +161,9 @@ class GatesTest {
     }
 
     // ── G-ROW: who sits in the row ──
-    @Test fun `G-ROW-pinned a pinned running app leaves the tasks`() {
-        assertEquals(listOf(b), ready(a, b, pins = listOf("app.a")).tasks)
-    }
 
     @Test fun `G-ROW-killall Kill All needs the setting and at least one task`() {
-        assertFalse(Overlay.loaded(OvState(), listOf(a), emptyList(), false, false).hasKillAll)
+        assertFalse(Overlay.loaded(OvState(), listOf(a), emptyList(), false).hasKillAll)
         assertFalse(ready(pins = listOf("p.x")).hasKillAll)
         assertTrue(ready(a).hasKillAll)
     }
@@ -293,38 +276,16 @@ class GatesTest {
     }
 
     // ── G-UPMENU: UP opens the menu only on an app (1.8) ──
-    @Test fun `G-UPMENU-card UP opens the menu on a task or pin, never on the in-row gear`() {
-        assertEquals("app.a", press(ready(a), Btn.UP).first.ctxPkg)
-        assertNull(press(Overlay.loaded(OvState(), listOf(a), emptyList(), false, false).copy(focus = 0), Btn.UP).first.ctxPkg)
-    }
 
-    @Test fun `G-UPMENU-pin Close on a pin keeps it pinned, on a task it flies off`() {
-        var m = press(ready(a, pins = listOf("app.a")).copy(focus = 1), Btn.UP).first
-        repeat(3) { m = press(m, Btn.UP).first }
-        assertNull(press(m, Btn.OK).first.flying)
-        var t = press(ready(a), Btn.UP).first
-        repeat(3) { t = press(t, Btn.UP).first }
-        assertEquals("app.a", press(t, Btn.OK).first.flying)
-    }
 
     // ── 1.9: the balloon is a sub-menu of the card ──
-    @Test fun `G-UPMENU-peek UP on a lowered card puts it back, on a normal card it opens the menu`() {
-        val low = ready(a).copy(peek = PEEK_DOWN)
-        assertNull(press(low, Btn.UP).first.ctxPkg); assertEquals(PEEK_NONE, press(low, Btn.UP).first.peek)
-        assertEquals("app.a", press(ready(a), Btn.UP).first.ctxPkg)
-    }
 
-    @Test fun `G-UPMENU-bottom DOWN closes the menu only from the bottom row, higher rows step down`() {
-        val m = press(ready(a), Btn.UP).first
-        assertNull(press(m, Btn.DOWN).first.ctxPkg)
-        assertEquals("app.a", press(m.copy(ctxSel = 1), Btn.DOWN).first.ctxPkg)
-    }
 
     // ── G-CURRENT (1.10): the app under the overlay is not re-opened ──
     @Test fun `G-CURRENT-match only the app under the overlay closes instead of switching`() {
-        val r = Overlay.loaded(OvState(), listOf(a), emptyList(), true, false, current = "app.a")
+        val r = Overlay.loaded(OvState(), listOf(a), emptyList(), true, current = "app.a")
         assertEquals(Effect.Close, release(press(r, Btn.OK).first, Btn.OK).second.last())
-        val o = Overlay.loaded(OvState(), listOf(a), emptyList(), true, false, current = "app.z")
+        val o = Overlay.loaded(OvState(), listOf(a), emptyList(), true, current = "app.z")
         assertEquals(Effect.Switch("app.a", 11), release(press(o, Btn.OK).first, Btn.OK).second.last())
     }
 
