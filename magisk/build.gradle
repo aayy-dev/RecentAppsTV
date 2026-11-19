@@ -1,0 +1,41 @@
+// The Magisk module: the release APK as a privileged system app, its permission allowlist, and the framework
+// overlay that gives it the recents role. No Shizuku needed on a rooted device.
+//
+//   ./gradlew :magisk:moduleZip   → magisk/build/outputs/RecentAppsTV-magisk-<version>.zip
+plugins {
+    id 'base'
+}
+
+evaluationDependsOn(':app')
+evaluationDependsOn(':magisk:overlay')
+
+def appConfig = project(':app').android.defaultConfig
+
+tasks.register('moduleZip', Zip) {
+    group = 'build'
+    description = 'Builds the Magisk module zip (release APK as a privileged system app).'
+    dependsOn ':app:assembleRelease', ':magisk:overlay:assembleRelease'
+
+    archiveFileName = "RecentAppsTV-magisk-${appConfig.versionName}.zip"
+    destinationDirectory = layout.buildDirectory.dir('outputs')
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+
+    // Magisk runs the scripts with sh: LF line endings whatever the checkout uses
+    from('module') {
+        filter(org.apache.tools.ant.filters.FixCrLfFilter, eol: org.apache.tools.ant.filters.FixCrLfFilter.CrLf.newInstance('lf'))
+        filesMatching('module.prop') {
+            expand(version: appConfig.versionName, versionCode: appConfig.versionCode)
+        }
+    }
+    from(project(':app').layout.buildDirectory.file('outputs/apk/release/app-release.apk')) {
+        into 'system/priv-app/RecentAppsTV'
+        rename { 'RecentAppsTV.apk' }
+    }
+    from(project(':magisk:overlay').layout.buildDirectory.file('outputs/apk/release/overlay-release.apk')) {
+        into 'system/product/overlay'
+        rename { 'RecentAppsTVFrameworkOverlay.apk' }
+    }
+}
+
+tasks.named('assemble') { dependsOn 'moduleZip' }

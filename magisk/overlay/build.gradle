@@ -1,0 +1,30 @@
+// The framework overlay the Magisk module installs: resources only, no code.
+plugins {
+    id 'com.android.application'
+}
+
+def app = project(':app').android.defaultConfig
+
+android {
+    namespace 'com.websnake.recentstv.overlay.framework'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.websnake.recentstv.overlay.framework'
+        minSdk 24
+        targetSdk 34
+        versionCode app.versionCode
+        versionName app.versionName
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false        // the overlay's resources are only matched by name at runtime
+            signingConfig signingConfigs.debug
+        }
+    }
+    lint {
+        checkReleaseBuilds false
+    }
+}

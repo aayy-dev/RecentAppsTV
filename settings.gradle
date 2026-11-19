@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "RecentAppsTV"
 include ':app'
+include ':magisk', ':magisk:overlay'    // the Magisk module (root instead of Shizuku): ./gradlew :magisk:moduleZip

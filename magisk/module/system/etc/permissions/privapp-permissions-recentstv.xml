@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Every signature|privileged permission the app requests must be listed here: with
+     ro.control_privapp_permissions=enforce a missing one is refused (or stops the boot on older builds). -->
+<permissions>
+    <privapp-permissions package="com.websnake.recentstv">
+        <permission name="android.permission.REAL_GET_TASKS"/>
+        <permission name="android.permission.START_TASKS_FROM_RECENTS"/>
+        <permission name="android.permission.FORCE_STOP_PACKAGES"/>
+        <permission name="android.permission.DUMP"/>
+        <permission name="android.permission.PACKAGE_USAGE_STATS"/>
+    </privapp-permissions>
+</permissions>

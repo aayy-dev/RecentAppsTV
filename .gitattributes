@@ -1,0 +1,2 @@
+# Magisk runs these with sh: keep LF on every checkout
+magisk/module/** text eol=lf

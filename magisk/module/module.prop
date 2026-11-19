@@ -1,0 +1,6 @@
+id=recentappstv
+name=Recent Apps TV
+version=${version}
+versionCode=${versionCode}
+author=websnake
+description=Recent apps switcher for Android TV, installed as a privileged system app: no Shizuku needed. Open it from its launcher icon or a button mapper shortcut.

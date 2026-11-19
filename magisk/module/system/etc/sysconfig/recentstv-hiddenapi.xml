@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- IActivityTaskManager / IActivityManager / ServiceManager are hidden APIs (HiddenApiBypass covers this too). -->
+<config>
+    <hidden-api-whitelisted-app package="com.websnake.recentstv"/>
+</config>

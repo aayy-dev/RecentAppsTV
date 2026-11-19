@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Framework overlay installed by the Magisk module (system/product/overlay). -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <overlay android:targetPackage="android" android:isStatic="true" android:priority="900" />
+    <application android:hasCode="false" />
+</manifest>
