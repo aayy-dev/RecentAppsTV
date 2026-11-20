@@ -2,5 +2,10 @@
 <resources>
     <color name="bg">#0a0b0d</color>
     <color name="accent">#3DDC84</color>
-    <color name="banner_bg">#15171b</color>
+    <!-- Launcher icon and TV banner (tools/icon/make_icon.py): three stacked cards, nothing behind them -->
+    <color name="ic_launcher_background">#00000000</color>
+    <color name="ic_launcher_foreground_primary">#3DDC84</color>
+    <color name="ic_launcher_foreground_secondary">#25A866</color>
+    <color name="ic_launcher_foreground_tertiary">#17754A</color>
+    <color name="ic_launcher_foreground_wordmark">#A6E9C5</color>
 </resources>

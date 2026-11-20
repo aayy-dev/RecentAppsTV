@@ -19,7 +19,7 @@ class ShortcutActivity : Activity() {
         val result = Intent()
             .putExtra(Intent.EXTRA_SHORTCUT_INTENT, open)
             .putExtra(Intent.EXTRA_SHORTCUT_NAME, getString(R.string.shortcut_recents_long))
-            .putExtra(Intent.EXTRA_SHORTCUT_ICON_RESOURCE, Intent.ShortcutIconResource.fromContext(this, R.drawable.ic_launcher))
+            .putExtra(Intent.EXTRA_SHORTCUT_ICON_RESOURCE, Intent.ShortcutIconResource.fromContext(this, R.mipmap.ic_launcher))
         setResult(RESULT_OK, result)
         finish()
     }
