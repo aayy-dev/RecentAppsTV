@@ -247,6 +247,8 @@ fun TvSettingsPage(
     preview: TvPreview?,
     subtitle: String? = null,
     header: (@Composable () -> Unit)? = null,
+    /** The list's first visible item: a row far down must be composed before it can take the focus. */
+    firstItem: Int = 0,
     rows: LazyListScope.() -> Unit,
 ) {
     Row(Modifier.fillMaxSize().background(Tokens.bg).padding(horizontal = TvKit.SafeHorizontal)) {
@@ -258,7 +260,7 @@ fun TvSettingsPage(
             )
             if (header != null) Box(Modifier.padding(start = 20.dp, top = 14.dp)) { header() }
             LazyColumn(
-                state = rememberLazyListState(),
+                state = rememberLazyListState(initialFirstVisibleItemIndex = firstItem),
                 modifier = Modifier.fillMaxSize().padding(top = 10.dp).fadingEdges(),
                 contentPadding = PaddingValues(top = 12.dp, bottom = 48.dp, start = 6.dp, end = 6.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp),

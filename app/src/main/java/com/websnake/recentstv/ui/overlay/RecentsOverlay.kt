@@ -347,7 +347,16 @@ fun RecentsOverlay(
                             // whole pixels: text and icon move together, no sub-pixel shimmer
                             translationX = (leftAnim.value + tx.value).roundToInt().toFloat()
                             translationY = (y + shift.value).roundToInt().toFloat()
-                            alpha = dim.value * sectionA.value * (if (chosen) 1f else chrome.value)
+                            // more pins than the frame holds: those past its edges fade out with their share outside it,
+                            // so none hangs over the screen edge or the frame's outline
+                            val inFrame = if (r == RowId.PINS && pinsOverflow) {
+                                val w = pinDp.toPx()
+                                val x = leftAnim.value + tx.value
+                                val lo = frameL + FRAME_INSET.toPx()
+                                val hi = frameL + frameW - FRAME_INSET.toPx()
+                                ((minOf(hi, x + w) - maxOf(lo, x)) / w).coerceIn(0f, 1f)
+                            } else 1f
+                            alpha = dim.value * sectionA.value * inFrame * (if (chosen) 1f else chrome.value)
                         },
                 ) {
                     when (item) {

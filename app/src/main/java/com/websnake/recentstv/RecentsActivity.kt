@@ -134,21 +134,20 @@ class RecentsActivity : ComponentActivity() {
                 val rise = with(LocalDensity.current) { 24.dp.toPx() }
                 val bg = settings.background
                 val blurOn = bg == Backdrop.BLUR && blurSupported
+                // a stronger middle than TV Recents' 60 %: a bright app's artwork must not compete with the cards
+                val fadeBrush = Brush.verticalGradient(
+                    0f to Color.Black.copy(alpha = 0.88f), 0.26f to Color.Black.copy(alpha = 0.72f),
+                    0.6f to Color.Black.copy(alpha = 0.68f), 1f to Color.Black.copy(alpha = 0.84f),
+                )
                 Box(
                     Modifier.fillMaxSize().drawBehind {
                         if (scrim <= 0f) return@drawBehind
                         when {
                             // TV Recents' scrim (60 % black rising to 80 % at the bottom), plus a darker band at the
                             // top so the title, the Settings button and the pinned section stay readable over an app's header
-                            bg == Backdrop.FADE -> drawRect(
-                                Brush.verticalGradient(
-                                    0f to Color.Black.copy(alpha = 0.84f), 0.26f to Color.Black.copy(alpha = 0.62f),
-                                    1f to Color.Black.copy(alpha = 0.8f),
-                                ),
-                                alpha = scrim,
-                            )
+                            bg == Backdrop.FADE -> drawRect(fadeBrush, alpha = scrim)
                             bg == Backdrop.COLOR -> drawRect(BackdropSwatches[settings.bgColor].second, alpha = scrim)
-                            bg == Backdrop.IMAGE -> if (backdropImage == null) drawRect(Tokens.bg, alpha = 0.94f * scrim)
+                            bg == Backdrop.IMAGE -> if (backdropImage == null) drawRect(fadeBrush, alpha = scrim)   // no picture yet: the Fade look
                             blurOn -> drawRect(Color.Black, alpha = 0.42f * scrim)
                             else -> drawRect(Color.Black, alpha = settings.bgDim / 100f * scrim)
                         }

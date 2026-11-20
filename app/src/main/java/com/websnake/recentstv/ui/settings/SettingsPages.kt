@@ -218,6 +218,12 @@ fun MainPage(
     TvSettingsPage(
         title = "Settings", subtitle = "Recent apps",
         preview = (entries.firstOrNull { it.key == focused } ?: entries.first()).preview,
+        // back from a choice: the list opens with the row we came from already composed, or it can't take the focus
+        firstItem = remember {
+            var n = 0; var at = 0
+            for (e in entries) { if (e.section != null) n++; if (e.key == start) at = n; n++ }
+            (at - 3).coerceAtLeast(0)
+        },
     ) {
         entries.forEach { e ->
             if (e.section != null) item(key = "s-${e.section}") { TvSectionHeader(e.section) }
