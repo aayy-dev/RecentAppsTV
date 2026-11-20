@@ -58,7 +58,7 @@ class TriggerService : AccessibilityService() {
                     Trigger.entries.firstOrNull { it.name == i.getStringExtra(EXTRA_TRIGGER) } ?: Trigger.HOLD_HOME,
                     i.getIntExtra(EXTRA_KEY, 0),
                 )
-                ACTION_LEARN -> { learnUntil = SystemClock.uptimeMillis() + LEARN_MS; learnKey = 0 }
+                ACTION_LEARN -> learnUntil = SystemClock.uptimeMillis() + LEARN_MS + 1_000L
                 ACTION_LEARN_CANCEL -> learnUntil = 0L
             }
         }
@@ -84,8 +84,9 @@ class TriggerService : AccessibilityService() {
 
     private fun configure(trigger: Trigger, button: Int) {
         handler.removeCallbacks(timeout)
-        engine.reset(trigger, button)
-        Log.i(TAG, "trigger: $trigger button=$button")
+        val b = if (TriggerEngine.learnable(button)) button else 0     // an earlier build allowed keys that are refused now
+        engine.reset(trigger, b)
+        Log.i(TAG, "trigger: $trigger button=$b")
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
@@ -104,6 +105,7 @@ class TriggerService : AccessibilityService() {
                 return true
             }
         } else if (learnKey != 0 && event.keyCode == learnKey) {   // the window ended with this key still down
+            if (down && event.repeatCount == 0) { learnKey = 0; return false }   // a new press: its release was lost
             if (!down) learnKey = 0
             return true
         }
@@ -152,9 +154,13 @@ class TriggerService : AccessibilityService() {
         private fun enabledList(context: Context) =
             Secure.Secure.getString(context.contentResolver, Secure.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty().split(':')
 
+        /** The system may rewrite an entry in the short form (".trigger.TriggerService"): compare as components. */
+        private fun isUs(context: Context, entry: String) =
+            ComponentName.unflattenFromString(entry) == ComponentName(context, TriggerService::class.java)
+
         /** Is the service turned on in the system's accessibility settings (the module, or the user, did it)? */
         fun isEnabled(context: Context): Boolean =
-            runCatching { enabledList(context).any { it.equals(component(context), ignoreCase = true) } }.getOrDefault(false)
+            runCatching { enabledList(context).any { isUs(context, it) } }.getOrDefault(false)
 
         /** The app changed Settings → Open with: tell the service (it lives in another process). */
         fun sendConfig(context: Context, s: Settings) {
@@ -178,7 +184,7 @@ class TriggerService : AccessibilityService() {
             runCatching {
                 val r = context.contentResolver
                 val cur = Secure.Secure.getString(r, Secure.Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
-                if (cur.split(':').none { it.equals(me, ignoreCase = true) }) {
+                if (cur.split(':').none { isUs(context, it) }) {
                     Secure.Secure.putString(r, Secure.Secure.ENABLED_ACCESSIBILITY_SERVICES, if (cur.isBlank()) me else "$cur:$me")
                 }
                 if (Secure.Secure.getInt(r, Secure.Secure.ACCESSIBILITY_ENABLED, 0) != 1) {

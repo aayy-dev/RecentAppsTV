@@ -175,12 +175,12 @@ fun MainPage(
     val entries = buildList {
         add(pick(
             "trigger", "Open with", "Open Recent apps", s.trigger.label(), ChoiceId.TRIGGER,
-            if (!triggerOn) "The remote buttons need the Magisk module (the app as a system app). Shortcuts and button-mapper apps still work."
+            if (!triggerOn) "The trigger service is off, so the remote buttons do nothing. Choose a trigger to turn it on (needs the Magisk module), or switch it on in Settings > Accessibility. Shortcuts and button-mapper apps still work."
             else "The remote button that opens Recent apps over whatever is playing. Press it again to close.", vis = false,
         ))
         if (s.trigger == Trigger.BUTTON) add(Entry(
             "button", null,
-            TvPreview("Button", "Press OK, then press the remote button you want to use. Navigation, Back, Home, Menu, power, volume, search and assistant buttons can't be chosen."),
+            TvPreview("Button", "Press OK, then press the remote button you want to use. Navigation, Back, Home, Menu, power, volume, search and assistant buttons, and the gamepad A and B buttons, can't be chosen."),
         ) { m, f ->
             TvRow(
                 "Button", m,

@@ -31,7 +31,9 @@ appops set --user 0 "$PKG" GET_USAGE_STATS allow
 # The remote trigger (Customize -> Open with: Hold Home by default) is the app's accessibility service. Turn it on
 # once, here, for a first boot before the app ever ran; after that it is the user's: if they switch it off in
 # Accessibility it stays off (the app turns it on again only when they pick a trigger in Customize).
-if [ ! -f "$MODDIR/a11y-done" ]; then
+# The marker lives outside the module folder: Magisk replaces that folder on every update.
+MARK=/data/adb/recentappstv-a11y-done
+if [ ! -f "$MARK" ]; then
     SVC="$PKG/$PKG.trigger.TriggerService"
     CUR=$(settings get secure enabled_accessibility_services)
     case "$CUR" in
@@ -40,5 +42,5 @@ if [ ! -f "$MODDIR/a11y-done" ]; then
         *) settings put secure enabled_accessibility_services "$CUR:$SVC" ;;
     esac
     settings put secure accessibility_enabled 1
-    touch "$MODDIR/a11y-done"
+    touch "$MARK"
 fi

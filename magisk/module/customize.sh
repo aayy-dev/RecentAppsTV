@@ -4,12 +4,13 @@ PKG=com.websnake.recentstv
 
 # This is for Android TV / Google TV, Android 10 or newer. On a phone the recents overlay would take Overview away
 # from the launcher; before Android 10 the task permissions it relies on don't exist.
-SDK=$(getprop ro.build.version.sdk)
+SDK=${API:-$(getprop ro.build.version.sdk)}
 if [ "${SDK:-0}" -lt 29 ]; then
     ui_print "! Needs Android 10 or newer (this is API ${SDK:-unknown})"
     abort "! Aborted, nothing was changed"
 fi
-if command -v pm >/dev/null 2>&1; then
+# (pm only answers while Android is running; flashed from recovery the TV check is skipped)
+if [ "$BOOTMODE" = true ] && command -v pm >/dev/null 2>&1; then
     case "$(pm has-feature android.software.leanback 2>/dev/null)" in
         *true*) ;;
         *)

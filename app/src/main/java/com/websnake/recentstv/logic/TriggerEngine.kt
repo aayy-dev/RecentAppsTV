@@ -119,7 +119,7 @@ class TriggerEngine(var mode: Trigger = Trigger.HOLD_HOME, var button: Int = 0) 
             82,                               // Menu: opens Settings in the overlay
             62, 84, 96, 97,                   // space, search, gamepad A / B
             177, 179, 181, 276,               // TV / set-top / AVR power, soft sleep
-            231,                              // voice assistant
+            219, 231,                         // assistant, voice assistant
             KEY_APP_SWITCH, KEY_RECENTS,      // already open Recent apps
         )
         fun learnable(code: Int) = code > 0 && code !in RESERVED

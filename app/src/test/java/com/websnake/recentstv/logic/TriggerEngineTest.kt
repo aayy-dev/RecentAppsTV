@@ -86,6 +86,6 @@ class TriggerEngineTest {
     @Test fun `T-08 learnable buttons exclude navigation, Back, Home, Menu, power and volume`() {
         assertTrue(TriggerEngine.learnable(STAR))
         assertTrue(TriggerEngine.learnable(172))                                              // KEYCODE_GUIDE
-        for (k in listOf(19, 20, 21, 22, 23, 66, 4, 3, 82, 26, 24, 25, 164, 0, 62, 84, 96, 97, 177, 179, 181, 231, 276, 187, 312)) assertFalse("$k", TriggerEngine.learnable(k))
+        for (k in listOf(19, 20, 21, 22, 23, 66, 4, 3, 82, 26, 24, 25, 164, 0, 62, 84, 96, 97, 177, 179, 181, 219, 231, 276, 187, 312)) assertFalse("$k", TriggerEngine.learnable(k))
     }
 }

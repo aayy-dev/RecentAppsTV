@@ -264,7 +264,7 @@ in time.
 Settings follow the format of Google TV's own settings (rows on the left, what the focused row does on the right).
 
 Uninstall: remove it in Magisk → Modules, or `adb shell su -c 'touch /data/adb/modules/recentappstv/remove'`, then reboot.
-The module disables itself if boots never finish, or if the system server restarts three times during one boot; the next boot then runs without it.
+The module disables itself if boots never finish, or if the system server restarts three times before a boot completes; the next boot then runs without it.
 It stays disabled across an update until you turn it on again in Magisk. Removing it leaves its accessibility entry in Settings → Accessibility (switch it off there).
 
 What the module adds (`magisk/`):

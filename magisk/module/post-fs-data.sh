@@ -4,7 +4,7 @@ MODDIR=${0%/*}
 
 # Magisk serves the module's files with a 1970 timestamp, so the package manager would keep its cached parse of
 # the old APK after an upgrade and miss new components or permissions.
-rm -f /data/system/package_cache/*/RecentAppsTV-* /data/system/package_cache/*/RecentAppsTVFrameworkOverlay-*
+rm -f /data/system/package_cache/*/RecentAppsTV-* /data/system/package_cache/*/RecentAppsTVFrameworkOverlay*
 
 # Boot guard: service.sh clears the count once boot completes. Three boots in a row that never get there
 # disable the module, so the next boot runs without it. (service.sh also watches for the system server

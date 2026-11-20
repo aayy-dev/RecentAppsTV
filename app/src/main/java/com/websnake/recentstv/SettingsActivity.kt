@@ -36,6 +36,7 @@ import com.websnake.recentstv.shizuku.Privileged
 import com.websnake.recentstv.trigger.TriggerService
 import com.websnake.recentstv.ui.overlay.Toast
 import com.websnake.recentstv.ui.settings.AppListPage
+import com.websnake.recentstv.ui.settings.ChoiceId
 import com.websnake.recentstv.ui.settings.ChoicePage
 import com.websnake.recentstv.ui.settings.ImagesPage
 import com.websnake.recentstv.ui.settings.MainPage
@@ -108,11 +109,16 @@ class SettingsActivity : ComponentActivity() {
                     ) { page ->
                         when (page) {
                             Page.Main -> MainPage(
-                                settings, triggerOn = Privileged.isSystem || TriggerService.isEnabled(this@SettingsActivity), learning = learning,
+                                settings, triggerOn = TriggerService.isEnabled(this@SettingsActivity), learning = learning,
                                 blurSupported = blurSupported, focusKey = mainFocus, onFocus = { mainFocus = it },
                                 onSave = ::save, open = ::open, onLearn = ::learnKey,
                             )
-                            is Page.Choice -> ChoicePage(page.id, settings, blurSupported) { save(it); back() }
+                            is Page.Choice -> ChoicePage(page.id, settings, blurSupported) {
+                                save(it)
+                                // choosing a trigger, even the one already chosen, is asking for the service (system app only)
+                                if (page.id == ChoiceId.TRIGGER && Privileged.isSystem) TriggerService.ensureEnabled(applicationContext)
+                                back()
+                            }
                             Page.Pinned -> AppListPage(
                                 title = "Pinned apps",
                                 explain = "Pinned apps sit in their own section above the recent apps, whether they are running or not. Turn an app on to pin it.",
@@ -183,7 +189,11 @@ class SettingsActivity : ComponentActivity() {
 
     /** Settings → Open with → Button: the trigger service hands over the next remote button (10 s to press it). */
     private fun learnKey() {
-        if (!TriggerService.isEnabled(this)) { showToast("Needs the Magisk module"); return }
+        if (!TriggerService.isEnabled(this)) {
+            if (Privileged.isSystem) { TriggerService.ensureEnabled(this); showToast("Trigger service turned on. Choose Change again") }
+            else showToast("Needs the accessibility service: turn it on in Settings > Accessibility")
+            return
+        }
         learning = true
         learnJob?.cancel()
         TriggerService.startLearning(this)

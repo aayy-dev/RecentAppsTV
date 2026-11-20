@@ -8,6 +8,9 @@ Magisk module build (`magisk-root`): a hybrid of this app and [TV Recents](https
   watches for system-server restart loops; the build fails if the privapp allowlist misses a permission or the APK is
   absent; no `START_ACTIVITIES_FROM_BACKGROUND`; the trigger service is switched on once and stays off if the user turns it
   off; learning a button refuses power, search, assistant and gamepad keys and never half-delivers a key.
+- **Trigger service stays the user's:** the "turned on once" marker lives outside the module folder (an update no longer
+  switches it back on); Customize shows the service's real state, and choosing a trigger turns it on again; entries are
+  compared as components; a saved button that is refused now counts as none; assistant key refused too.
 - **The ⚙ Settings button is now "Customize"** (a sliders icon), and the Settings page is titled Customize, so neither is
   mistaken for Android's own settings. The launcher icon, the Menu key and the button all open it.
 - **Pinned apps on their own row** above the recent apps (`RowId.PINS`); a running pin stays in the recents row too.

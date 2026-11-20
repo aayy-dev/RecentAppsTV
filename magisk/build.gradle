@@ -27,8 +27,8 @@ tasks.register('checkPrivappAllowlist') {
     dependsOn ':app:processReleaseManifest'
     doLast {
         def merged = project(':app').layout.buildDirectory.file('intermediates/merged_manifests/release/processReleaseManifest/AndroidManifest.xml').get().asFile
-        def asked = new XmlSlurper(false, false).parse(merged).'uses-permission'.collect { it.attributes()['android:name'] }
-        def listed = new XmlSlurper().parse(allowlistFile).'privapp-permissions'.permission.collect { it.@name.text() }
+        def asked = new groovy.xml.XmlSlurper(false, false).parse(merged).'uses-permission'.collect { it.attributes()['android:name'] }
+        def listed = new groovy.xml.XmlSlurper().parse(allowlistFile).'privapp-permissions'.permission.collect { it.@name.text() }
         def unknown = asked.findAll { !(it in listed) && !(it in notPrivileged) }
         if (unknown) throw new GradleException("Release manifest asks for ${unknown}: add each to ${allowlistFile.name} if it is signature|privileged, " +
             "or to notPrivileged in magisk/build.gradle if not. A privileged permission missing from the allowlist boot-loops Android 14.")
