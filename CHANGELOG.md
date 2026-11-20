@@ -20,6 +20,22 @@ Magisk module build (`magisk-root`): a hybrid of this app and [TV Recents](https
 - New launcher icon and TV banner with a transparent background (three stacked cards; the banner adds the
   "Recent Apps" wordmark, outlined from Manrope). Adaptive icon in `mipmap-anydpi-v26`; `tools/icon/make_icon.py`
   regenerates all of it.
+- **Settings rebuilt in the format of Google TV's own settings** (as InstallerX Revived's TV pages do): a two-pane
+  page of borderless rows that become a light pill when focused, each choice on its own page with radio rows, a live
+  miniature of the overlay on the right, real switches in the app lists. Focus and D-pad movement are the framework's
+  (`androidx.tv` Surface); the hand-written key state machine (`SettingsNav.key`, `SetRow`, `SetState`) is gone, and
+  with it the right-to-left layout.
+- **The trigger service runs in its own process** (`:trigger`). A key filter has 500 ms to answer; in the main process
+  the overlay's start-up made the Home release time out and reach the system, which then went Home right after the
+  overlay opened. Settings talks to it with package-internal broadcasts.
+- Visual pass over the overlay (from an end-to-end audit): the count line steps aside for the remove hint and for
+  toasts; toasts take the key hints' place; a vertical budget (`fit`) keeps Large cards with large pins on screen and
+  settles a Small layout lower; a menu opens above its card (a pin: above the pinned frame) with the other section and
+  the header out of the way; the pinned frame grows for the focused pin's name, which sits centred under its icon, and
+  no longer runs off screen with many pins; the Settings button has the cards' halo; the pin badge sits on a Circle
+  card's outline; idle cards, the Kill all tile and the pinned frame are opaque; key hints follow the focus; the empty
+  state has the overlay's header and footer; Fade is darker at the top; wording is consistent ("Kill all",
+  "Hide from Recent apps", "Card size").
 - **Fade background** (TV Recents' dim, 60 → 80 % black top to bottom) is the new default; *Pinned position* is gone.
 
 - Root without Shizuku: `./gradlew :magisk:moduleZip` wraps the release APK in a Magisk module that installs it as a

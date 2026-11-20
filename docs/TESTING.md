@@ -31,6 +31,14 @@ Bookmark learned; Bookmark opens and closes the overlay, Home still goes Home; D
 goes Home; back on Hold Home: ↓ then OK → `removeTask(137)=true`; Kill all → recents gone, the pin stays, focus on the
 pins row over the placeholder; Hold Home again closes; the launcher icon opens Settings. 181 JVM tests pass.
 
+Android 14, 2026-11-19: the `tv14` AVD (Google TV, API 34, x86, Magisk 30.7 via rootAVD). All nine permissions
+granted, recents role assigned, trigger service bound in its own process (`com.websnake.recentstv:trigger`). Hold Home
+over an app → overlay stays open on a cold open that took 2.5 s (before the service had its own process the Home
+release timed out in the key filter and the system went Home); warm opens load in about 20 ms. Quick switch, ↓ then OK,
+Kill all, hold-OK menu on a recent app and on a pin, pin toast, Settings in the two-pane format (every choice page,
+Pinned apps switches, Button learning with a real Bookmark key) all checked on screen. 181 → 162 JVM tests after the
+old Settings key machine and its tests were removed.
+
 TV Recents 0.1.0-alpha.2 was used the same way for comparison (double Home over Aurora: thumbnail cards, no header,
 ↓ then OK removes, a second double Home closes, single Home waits 300 ms).
 

@@ -251,14 +251,17 @@ opened and driven:
 | **Open / close** | Hold **Home** (default). Settings → *Open with* also offers **Double Home** (Home waits 0.3 s for a second press, holding it still opens the Dashboard), **Button** (any remote button you choose — it then does nothing else), or **Off**. A remote's Recents key always works, and so do button-mapper shortcuts. |
 | **Quick switch** | Opened over an app, the focus starts on the app before it: hold Home, then OK, and you are back. |
 | **Pinned apps** | An outlined section above the recent apps, centred (it does not scroll). ↑ goes up to it, ↓ back down. A running pin also stays in the recents row. |
-| **Options** | **Hold OK** on any app: Pin / Unpin, Add to exceptions, App info, Close. (↑ no longer opens it: ↑ moves between rows.) |
+| **Options** | **Hold OK** on any app: Pin / Unpin, Hide from Recent apps, App info, Close app. (↑ no longer opens it: ↑ moves between rows.) |
 | **Remove** | ↓ marks the app, then ↓ again or **OK** removes it; ↑ or Back keeps it. |
 | **Settings** | The ⚙ button at the top centre (↑ from the top row; "Recent apps" sits at the top left), the Menu key, or the **launcher icon** — the app's icon opens Settings, not the overlay. |
 | **Background** | *Fade* by default: TV Recents' dim, 60 % black at the top to 80 % at the bottom. Dim, Blur, Color and Image are still there. |
 
 The remote trigger is an accessibility service in the app (*Recent Apps remote button*), which the module turns on: it
 sees each key before the system does, so it can take Home or a button for itself (a getevent watcher like TV Recents'
-can only listen). It reads keys only, no screen content.
+can only listen). It reads keys only, no screen content, and runs in its own small process so it always answers a key
+in time.
+
+Settings follow the format of Google TV's own settings (rows on the left, what the focused row does on the right).
 
 Uninstall: remove it in Magisk → Modules, or `adb shell su -c 'touch /data/adb/modules/recentappstv/remove'`, then reboot.
 If a boot never completes three times in a row, the module disables itself.
