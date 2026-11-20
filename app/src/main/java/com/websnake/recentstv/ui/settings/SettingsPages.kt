@@ -180,7 +180,7 @@ fun MainPage(
         ))
         if (s.trigger == Trigger.BUTTON) add(Entry(
             "button", null,
-            TvPreview("Button", "Press OK, then press the remote button you want to use. Navigation, Back, Home, Menu, power and volume can't be chosen."),
+            TvPreview("Button", "Press OK, then press the remote button you want to use. Navigation, Back, Home, Menu, power, volume, search and assistant buttons can't be chosen."),
         ) { m, f ->
             TvRow(
                 "Button", m,

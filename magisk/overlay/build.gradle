@@ -3,6 +3,7 @@ plugins {
     id 'com.android.application'
 }
 
+evaluationDependsOn(':app')   // read its versions below whatever the evaluation order
 def app = project(':app').android.defaultConfig
 
 android {
