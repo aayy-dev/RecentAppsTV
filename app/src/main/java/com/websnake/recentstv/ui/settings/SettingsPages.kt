@@ -244,6 +244,7 @@ fun ChoicePage(id: ChoiceId, s: Settings, blurSupported: Boolean, onPick: (Setti
     val live = id != ChoiceId.TRIGGER
     TvSettingsPage(
         title = title,
+        firstItem = (selected - 3).coerceAtLeast(0),   // the chosen row must be composed to take the focus
         // the right pane shows the overlay as the focused option would make it
         preview = TvPreview(o.title, o.summary, if (live) ({ OverlayPreview(o.apply(s)) }) else null),
     ) {

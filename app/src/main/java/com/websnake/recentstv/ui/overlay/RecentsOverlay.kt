@@ -301,7 +301,7 @@ fun RecentsOverlay(
                 val h = f.frameHead.toPx() + pinHalfPx * 2f + foot
                 val cr = CornerRadius(24.dp.toPx())
                 // a dark fill: whatever the app behind shows there must not read as part of the section
-                drawRoundRect(Tokens.surface.copy(alpha = 0.78f * a), Offset(fl.value, top), Size(fw.value, h), cr)
+                drawRoundRect(Tokens.surface.copy(alpha = 0.94f * a), Offset(fl.value, top), Size(fw.value, h), cr)
                 val edge = lerp(Color.White.copy(alpha = 0.18f), accent.base.copy(alpha = 0.6f), active.value)
                 drawRoundRect(edge.copy(alpha = edge.alpha * a), Offset(fl.value, top), Size(fw.value, h), cr, style = Stroke(1.5.dp.toPx()))
             },
