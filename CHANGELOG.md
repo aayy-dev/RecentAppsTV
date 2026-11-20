@@ -4,6 +4,10 @@
 
 Magisk module build (`magisk-root`): a hybrid of this app and [TV Recents](https://github.com/jcgw22/android-tv-recents).
 
+- **Module hardening (from an adversarial review):** refuses to install on a non-TV or below Android 10; the boot guard also
+  watches for system-server restart loops; the build fails if the privapp allowlist misses a permission or the APK is
+  absent; no `START_ACTIVITIES_FROM_BACKGROUND`; the trigger service is switched on once and stays off if the user turns it
+  off; learning a button refuses power, search, assistant and gamepad keys and never half-delivers a key.
 - **The ⚙ Settings button is now "Customize"** (a sliders icon), and the Settings page is titled Customize, so neither is
   mistaken for Android's own settings. The launcher icon, the Menu key and the button all open it.
 - **Pinned apps on their own row** above the recent apps (`RowId.PINS`); a running pin stays in the recents row too.

@@ -160,7 +160,12 @@ class SettingsActivity : ComponentActivity() {
         lifecycleScope.launch {
             store.save(n)
             // the trigger service is another process: it is told, it doesn't watch the file
-            if (trigger) TriggerService.sendConfig(applicationContext, n)
+            if (trigger) {
+                // choosing a trigger is the user asking for the service: turn it on (system app only). Not at every start,
+                // so switching it off in Accessibility stays off.
+                if (Privileged.isSystem) TriggerService.ensureEnabled(applicationContext)
+                TriggerService.sendConfig(applicationContext, n)
+            }
         }
     }
 

@@ -14,8 +14,6 @@ class RecentsApp : Application() {
         // the trigger service's own process needs none of this: it only filters keys
         if (Build.VERSION.SDK_INT >= 28 && getProcessName().endsWith(com.websnake.recentstv.trigger.TriggerService.PROCESS_SUFFIX)) return
         com.websnake.recentstv.shizuku.Privileged.init(this)     // Shizuku, or a system app (Magisk module)
-        // as a system app: the remote trigger (Hold Home …) is an accessibility service the app turns on itself
-        if (com.websnake.recentstv.shizuku.Privileged.isSystem) com.websnake.recentstv.trigger.TriggerService.ensureEnabled(this)
         com.websnake.recentstv.data.SettingsStore.warm(this)      // start the async prefs loads now
         com.websnake.recentstv.data.PackageRepository.warm(this)
         // Lift the hidden-API blocklist so privileged framework reflection

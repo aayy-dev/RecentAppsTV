@@ -110,13 +110,17 @@ class TriggerEngine(var mode: Trigger = Trigger.HOLD_HOME, var button: Int = 0) 
         /** Android's double-tap timeout (ViewConfiguration), as TV Recents uses. */
         const val DOUBLE_MS = 300L
 
-        /** Keys that can't be the trigger button: navigation, Back, Home, power and volume. */
+        /** Keys that can't be the trigger button: navigation, Back, Home, power (TV included), assistant, search and volume. */
         private val RESERVED = setOf(
             19, 20, 21, 22, 23, 66, 160,      // D-pad, centre, Enter, numpad Enter
             4, 111, KEY_HOME,                 // Back, Escape, Home
             26, 223, 224,                     // power, sleep, wake
             24, 25, 164,                      // volume, mute
             82,                               // Menu: opens Settings in the overlay
+            62, 84, 96, 97,                   // space, search, gamepad A / B
+            177, 179, 181, 276,               // TV / set-top / AVR power, soft sleep
+            231,                              // voice assistant
+            KEY_APP_SWITCH, KEY_RECENTS,      // already open Recent apps
         )
         fun learnable(code: Int) = code > 0 && code !in RESERVED
     }

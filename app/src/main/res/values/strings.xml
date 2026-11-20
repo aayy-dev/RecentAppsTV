@@ -5,7 +5,7 @@
 
     <string name="shortcut_recents_short">Recents</string>
     <string name="trigger_label">Recent Apps remote button</string>
-    <string name="trigger_desc">Opens Recent apps from the remote (Hold Home, Double Home or a button you choose). Reads only those keys; nothing is collected.</string>
+    <string name="trigger_desc">Opens Recent apps from the remote (Hold Home, Double Home or a button you choose). It sees every key press so it can tell which are its own, and keeps none of them.</string>
     <string name="shortcut_recents_long">Open Recent Apps</string>
 
     <!-- Overlay -->

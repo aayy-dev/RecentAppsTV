@@ -35,10 +35,9 @@
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.MANAGE_ACTIVITY_TASKS"
         tools:ignore="ProtectedPermissions" />
-    <!-- Turns on its own trigger service (accessibility), and opens the overlay from it at any time. -->
+    <!-- Turns its trigger service (accessibility) on when the user picks a trigger in Customize. An accessibility
+         service may start activities from the background without a permission of its own. -->
     <uses-permission android:name="android.permission.WRITE_SECURE_SETTINGS"
-        tools:ignore="ProtectedPermissions" />
-    <uses-permission android:name="android.permission.START_ACTIVITIES_FROM_BACKGROUND"
         tools:ignore="ProtectedPermissions" />
 
     <application

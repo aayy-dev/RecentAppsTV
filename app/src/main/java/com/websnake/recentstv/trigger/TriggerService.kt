@@ -34,7 +34,10 @@ import com.websnake.recentstv.logic.TriggerEngine
  * made the Home release time out, reach the system, and send the user Home right after the overlay opened. Here
  * nothing else ever runs on the main thread. The app talks to it with broadcasts that stay inside the package.
  *
- * The Magisk module turns the service on (the app holds WRITE_SECURE_SETTINGS as a system app); [ensureEnabled].
+ * The Magisk module turns the service on once (its service.sh); the app does it again when the user picks a trigger
+ * in Customize ([ensureEnabled], the app holds WRITE_SECURE_SETTINGS as a system app). Neither runs at every start, so
+ * the user can switch the service off in Accessibility. Note it sees every key to decide which are its own; it keeps
+ * none of them.
  */
 class TriggerService : AccessibilityService() {
 
@@ -45,6 +48,8 @@ class TriggerService : AccessibilityService() {
     private var homeSentAt = 0L
     /** Settings → Open with → Button is waiting for a press until this uptime. */
     private var learnUntil = 0L
+    /** The key whose press started inside the learn window (taken, its release comes next). */
+    private var learnKey = 0
 
     private val commands = object : BroadcastReceiver() {
         override fun onReceive(c: Context, i: Intent) {
@@ -53,7 +58,7 @@ class TriggerService : AccessibilityService() {
                     Trigger.entries.firstOrNull { it.name == i.getStringExtra(EXTRA_TRIGGER) } ?: Trigger.HOLD_HOME,
                     i.getIntExtra(EXTRA_KEY, 0),
                 )
-                ACTION_LEARN -> learnUntil = SystemClock.uptimeMillis() + LEARN_MS
+                ACTION_LEARN -> { learnUntil = SystemClock.uptimeMillis() + LEARN_MS; learnKey = 0 }
                 ACTION_LEARN_CANCEL -> learnUntil = 0L
             }
         }
@@ -86,15 +91,21 @@ class TriggerService : AccessibilityService() {
     override fun onKeyEvent(event: KeyEvent): Boolean {
         val down = event.action == KeyEvent.ACTION_DOWN
         // waiting for the button to use: the next learnable key (released) is handed to Settings instead of acting
-        if (learnUntil != 0L) {
-            if (SystemClock.uptimeMillis() > learnUntil) learnUntil = 0L
-            else if (TriggerEngine.learnable(event.keyCode)) {
+        // only a key pressed inside the window counts, and its release is taken with it: a key held from before the
+        // window, or released after it ends, is never half-delivered to the app
+        if (learnUntil != 0L && SystemClock.uptimeMillis() > learnUntil) learnUntil = 0L
+        if (learnUntil != 0L && TriggerEngine.learnable(event.keyCode)) {
+            if (down && event.repeatCount == 0 && learnKey == 0) learnKey = event.keyCode
+            if (learnKey == event.keyCode) {
                 if (!down) {
-                    learnUntil = 0L
+                    learnUntil = 0L; learnKey = 0
                     sendBroadcast(Intent(ACTION_LEARNED).setPackage(packageName).putExtra(EXTRA_KEY, event.keyCode))
                 }
                 return true
             }
+        } else if (learnKey != 0 && event.keyCode == learnKey) {   // the window ended with this key still down
+            if (!down) learnKey = 0
+            return true
         }
         if (event.keyCode == KeyEvent.KEYCODE_HOME && event.deviceId == KeyCharacterMap.VIRTUAL_KEYBOARD &&
             SystemClock.uptimeMillis() - homeSentAt < 1000

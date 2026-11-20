@@ -264,16 +264,17 @@ in time.
 Settings follow the format of Google TV's own settings (rows on the left, what the focused row does on the right).
 
 Uninstall: remove it in Magisk → Modules, or `adb shell su -c 'touch /data/adb/modules/recentappstv/remove'`, then reboot.
-If a boot never completes three times in a row, the module disables itself.
+The module disables itself if boots never finish, or if the system server restarts three times during one boot; the next boot then runs without it.
+It stays disabled across an update until you turn it on again in Magisk. Removing it leaves its accessibility entry in Settings → Accessibility (switch it off there).
 
 What the module adds (`magisk/`):
 
 | Part | Why |
 |---|---|
 | `system/priv-app/RecentAppsTV` | the release APK as a privileged system app |
-| privapp allowlist | `REAL_GET_TASKS`, `START_TASKS_FROM_RECENTS`, `FORCE_STOP_PACKAGES`, `DUMP`, `PACKAGE_USAGE_STATS`, `WRITE_SECURE_SETTINGS` (turns its trigger service on), `START_ACTIVITIES_FROM_BACKGROUND` |
+| privapp allowlist | `REAL_GET_TASKS`, `START_TASKS_FROM_RECENTS`, `FORCE_STOP_PACKAGES`, `DUMP`, `PACKAGE_USAGE_STATS`, `WRITE_SECURE_SETTINGS` (turns its trigger service on when a trigger is chosen) |
 | framework overlay | `config_recentsComponentName` → the app (a stub activity), which gives it the recents role: `REMOVE_TASKS`, `MANAGE_ACTIVITY_TASKS`. TV builds leave this slot empty |
-| `service.sh` | allows the usage-access app-op at each boot (Shizuku did this before) and turns on the remote-trigger service |
+| `service.sh` | allows the usage-access app-op at each boot (Shizuku did this before), turns the remote-trigger service on once (switch it off in Accessibility and it stays off), and watches for system-server restart loops |
 
 At start the app checks whether it holds `REAL_GET_TASKS`; if so it calls the system services directly and runs
 `dumpsys` as itself (`shizuku/Privileged.kt`), else it uses Shizuku as before. The approach (priv-app + recents-role
