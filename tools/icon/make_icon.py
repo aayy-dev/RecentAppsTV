@@ -4,7 +4,7 @@
     python3 tools/icon/make_icon.py        # needs fontTools (pip install fonttools)
 
 The mark is three stacked cards (recent apps). The banner is the mark plus the wordmark, laid out like
-other TV banners that show a logo and a two-line name on a transparent tile. The wordmark is outlined
+other TV banners that show a logo and a name on a transparent tile. The wordmark is outlined
 from the app's own font (app/src/main/res/font/manrope.ttf, OFL), so no text or font is needed at run time.
 """
 from pathlib import Path
@@ -51,7 +51,7 @@ def vector(w, h, vw, vh, body):
 
 
 def text_path(text, weight, cap_px, x, baseline, max_w=None):
-    """SVG path data for [text] at [weight], capitals [cap_px] tall, starting at x on [baseline]."""
+    """SVG path data for [text] at [weight], capitals [cap_px] tall, starting at x on [baseline]; also its end x and real cap height."""
     font = instantiateVariableFont(TTFont(FONT), {"wght": weight})
     glyphs, cmap, hmtx = font.getGlyphSet(), font.getBestCmap(), font["hmtx"]
     cap = font["OS/2"].sCapHeight
@@ -65,7 +65,7 @@ def text_path(text, weight, cap_px, x, baseline, max_w=None):
         name = cmap[ord(c)]
         glyphs[name].draw(TransformPen(pen, (scale, 0, 0, -scale, cx, baseline)))
         cx += hmtx[name][0] * scale
-    return pen.getCommands(), cx
+    return pen.getCommands(), cx, scale * cap
 
 
 def write(rel, text):
@@ -94,10 +94,14 @@ legacy = vector(48, 48, 48, 48, mark(x=6, y=6, size=22, step=7, r=5, colors=TONE
 write("mipmap-anydpi/ic_launcher.xml", legacy)
 write("mipmap-anydpi/ic_launcher_round.xml", legacy)
 
-# ── TV banner (320 × 180 px at xhdpi): mark on the left, "Recent Apps" over "TV", nothing behind them ──
-line1, _ = text_path("Recent Apps", 800, 26, 122, 88, max_w=184)
-line2, _ = text_path("TV", 700, 20, 122.5, 121)
-banner = (mark(x=26, y=52, size=46, step=15, r=10, colors=TONES)
-          + f'    <path\n        android:fillColor="#FFFFFFFF"\n        android:pathData="{line1}" />\n'
-          + f'    <path\n        android:fillColor="@color/ic_launcher_foreground_wordmark"\n        android:pathData="{line2}" />\n')
+# ── TV banner (320 × 180 px at xhdpi): mark on the left, "Recent Apps" beside it, nothing behind them ──
+CAP = 28          # capital height wanted, px; narrowed if the name would pass MAX_W
+MAX_W = 206
+X = 102
+_, _, cap = text_path("Recent Apps", 800, CAP, X, 0, max_w=MAX_W)       # the height it really gets
+# one line, its capitals centred on the banner's middle (y = 90), level with the mark
+name, end, _ = text_path("Recent Apps", 800, CAP, X, 90 + cap / 2, max_w=MAX_W)
+banner = (mark(x=18, y=56, size=42, step=13, r=9, colors=TONES)
+          + f'    <path\n        android:fillColor="#FFFFFFFF"\n        android:pathData="{name}" />\n')
 write("drawable/tv_banner.xml", vector(160, 90, 320, 180, banner))
+print(f"wordmark: capitals {cap:.1f} px, x {X} to {end:.1f}")

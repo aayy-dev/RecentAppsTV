@@ -18,7 +18,7 @@ Magisk module build (`magisk-root`): a hybrid of this app and [TV Recents](https
   name right under the icon; "Recent apps" is at the top left, the Settings button at the top centre; the app count
   ("3 apps") is centred under the recents row and no longer counts pins.
 - New launcher icon and TV banner with a transparent background (three stacked cards; the banner adds the
-  "Recent Apps / TV" wordmark, outlined from Manrope). Adaptive icon in `mipmap-anydpi-v26`; `tools/icon/make_icon.py`
+  "Recent Apps" wordmark, outlined from Manrope). Adaptive icon in `mipmap-anydpi-v26`; `tools/icon/make_icon.py`
   regenerates all of it.
 - **Fade background** (TV Recents' dim, 60 → 80 % black top to bottom) is the new default; *Pinned position* is gone.
 
