@@ -4,6 +4,8 @@
 
 Magisk module build (`magisk-root`): a hybrid of this app and [TV Recents](https://github.com/jcgw22/android-tv-recents).
 
+- **The ⚙ Settings button is now "Customize"** (a sliders icon), and the Settings page is titled Customize, so neither is
+  mistaken for Android's own settings. The launcher icon, the Menu key and the button all open it.
 - **Pinned apps on their own row** above the recent apps (`RowId.PINS`); a running pin stays in the recents row too.
   ↑ / ↓ move between the rows, ↑ from the top row reaches the ⚙ Settings button, which left the row for the top right.
 - **Options only on hold OK.** ↑ no longer opens the menu.

@@ -62,6 +62,6 @@ fun EmptyState() {
             Modifier.align(Alignment.BottomCenter).padding(bottom = 34.dp),
             horizontalArrangement = Arrangement.spacedBy(24.dp),
             verticalAlignment = Alignment.CenterVertically,
-        ) { KeyHint("OK", "Settings"); KeyHint("Back", "Close") }
+        ) { KeyHint("OK", "Customize"); KeyHint("Back", "Close") }
     }
 }

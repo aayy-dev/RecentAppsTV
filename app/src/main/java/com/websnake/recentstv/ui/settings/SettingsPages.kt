@@ -216,7 +216,7 @@ fun MainPage(
     var focused by remember { mutableStateOf(start) }
     val requester = rememberInitialFocus()
     TvSettingsPage(
-        title = "Settings", subtitle = "Recent apps",
+        title = "Customize", subtitle = "Recent apps",
         preview = (entries.firstOrNull { it.key == focused } ?: entries.first()).preview,
         // back from a choice: the list opens with the row we came from already composed, or it can't take the focus
         firstItem = remember {

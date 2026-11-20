@@ -423,7 +423,7 @@ fun RecentsOverlay(
     // ── footer key hints: what the keys do on the thing in focus (hidden while the menu is open) ──
     val footer by animateFloatAsState(if (menuOpen || toastOn) 0f else 1f, tween(200), label = "foot")
     val hints = when {
-        state.gearFocused -> listOf("OK" to "Settings", "↓" to "Apps", "Back" to "Close")
+        state.gearFocused -> listOf("OK" to "Customize", "↓" to "Apps", "Back" to "Close")
         state.peek != PEEK_NONE -> listOf("OK / ↓" to "Remove", "↑ / Back" to "Keep")
         state.focusedItem == Item.KillAll -> listOf("OK" to "Close all apps", "Back" to "Close")
         pinsFocused -> listOf("OK" to "Open", "Hold OK" to "Options", "Back" to "Close")
@@ -824,11 +824,11 @@ internal fun SettingsButton(focused: Boolean) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Image(
-            painter = painterResource(R.drawable.ic_settings),
-            contentDescription = "Settings",
+            painter = painterResource(R.drawable.ic_customize),
+            contentDescription = "Customize",
             colorFilter = ColorFilter.tint(glyph),
             modifier = Modifier.size(GEAR_H * 0.5f),
         )
-        Text("Settings", style = Type.small.copy(fontWeight = FontWeight.Bold), color = glyph, maxLines = 1, softWrap = false)
+        Text("Customize", style = Type.small.copy(fontWeight = FontWeight.Bold), color = glyph, maxLines = 1, softWrap = false)
     }
 }

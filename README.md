@@ -253,7 +253,7 @@ opened and driven:
 | **Pinned apps** | An outlined section above the recent apps, centred (it does not scroll). ↑ goes up to it, ↓ back down. A running pin also stays in the recents row. |
 | **Options** | **Hold OK** on any app: Pin / Unpin, Hide from Recent apps, App info, Close app. (↑ no longer opens it: ↑ moves between rows.) |
 | **Remove** | ↓ marks the app, then ↓ again or **OK** removes it; ↑ or Back keeps it. |
-| **Settings** | The ⚙ button at the top centre (↑ from the top row; "Recent apps" sits at the top left), the Menu key, or the **launcher icon** — the app's icon opens Settings, not the overlay. |
+| **Settings** | The **Customize** button at the top centre (↑ from the top row; "Recent apps" sits at the top left), the Menu key, or the **launcher icon** — the app's icon opens Settings, not the overlay. |
 | **Background** | *Fade* by default: TV Recents' dim, 60 % black at the top to 80 % at the bottom. Dim, Blur, Color and Image are still there. |
 
 The remote trigger is an accessibility service in the app (*Recent Apps remote button*), which the module turns on: it
