@@ -119,9 +119,11 @@
             android:noHistory="true"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
-        <!-- The remote trigger: Hold Home / Double Home / a chosen button / the Recents key (Settings → Open with). -->
+        <!-- The remote trigger: Hold Home / Double Home / a chosen button / the Recents key (Settings → Open with).
+             Its own process: a key filter must answer within 500 ms, whatever the overlay is doing. -->
         <service
             android:name=".trigger.TriggerService"
+            android:process=":trigger"
             android:exported="true"
             android:label="@string/trigger_label"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
