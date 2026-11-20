@@ -110,7 +110,8 @@ fun ContextMenu(
             Column {
                 Text(t.label, style = Type.label.copy(fontWeight = FontWeight.ExtraBold), color = Tokens.text, maxLines = 1)
                 // 1.10.1: no running status under the name (owner); only "Pinned" for a pinned app
-                if (isPinned) Text("Pinned", style = Type.small, color = Tokens.textDim, maxLines = 1)
+                // the line is kept (clear) for an unpinned app, so the menu doesn't change height when Pin / Unpin is used
+                Text("Pinned", style = Type.small, color = if (isPinned) Tokens.textDim else Color.Transparent, maxLines = 1)
             }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(Tokens.line))
