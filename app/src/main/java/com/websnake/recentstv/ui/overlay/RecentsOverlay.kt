@@ -52,6 +52,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.coerceIn
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -85,19 +87,26 @@ private val PEEK = 23.dp
 private val FLY = 350.dp
 private val LABEL_GAP = 7.dp          // focused card → its name (plus 3dp as it fades in)
 private val GLOW_SPREAD = 11.dp       // how far the focus glow reaches past the card
-private val MENU_SHIFT = 97.dp        // the rows slide down while the hold-OK menu is open
 private val EMPTY_SLOT_W = 320.dp
 private val GEAR_H = 38.dp            // ⚙ Settings button at the top
-private val MENU_EST_H = 240.dp       // hold-OK menu height (header + 4 rows)
+private val HEADER_TOP = 36.dp
+private val MENU_EST_H = 226.dp       // hold-OK menu height (header + 4 rows)
+private val MENU_GAP = 31.dp          // as in ContextMenu: menu bottom → its anchor (the tip is inside it)
+private val MENU_TOP_MARGIN = 20.dp   // the menu stays this far below the top of the screen
 private val FRAME_TOP = 96.dp         // the pinned section's frame starts below the header line
 private val FRAME_HEAD = 36.dp        // frame edge → focused pin's top: the "Pinned" title sits in it
-private val FRAME_FOOT = 41.dp        // focused pin's bottom → frame edge: room for its name, right under the icon
+private val FRAME_FOOT = 41.dp        // focused pin's bottom → frame edge while a pin is focused: room for its name
+private val FRAME_FOOT_REST = 18.dp   // … and at rest (no name shown)
 private val FRAME_SIDE = 22.dp        // frame edge ↔ first / last pin
-private val FRAME_MIN_W = 200.dp      // a lone pin still has room for its name
-private val FRAME_INSET = 10.dp       // a pin's name stays this far inside the frame
+private val FRAME_MIN_W = 200.dp      // a lone pin still has room for the title
+private val FRAME_INSET = 12.dp       // a pin's name stays this far inside the frame
+private val FRAME_SCREEN_MARGIN = 12.dp
 private val PIN_LABEL_GAP = 6.dp      // pin → its name
 private val COUNT_GAP = 46.dp         // recents row → the "N apps" line, below the focused app's name
+private val COUNT_GAP_BARE = 22.dp    // … when no name is showing under the row
+private val TASK_TAIL = 58.dp         // below the focused card: its name and the count line
 private val SECTION_GAP = 24.dp       // pinned frame → recents row
+private val FOOTER_CLEAR = 82.dp      // the footer hints own this much of the bottom
 private const val DIMMED = 0.32f
 
 /** One place in a row. [item] null = the "No recent apps" placeholder (not focusable). */
@@ -109,18 +118,46 @@ private class RowLayout(val slots: List<Slot>, val strip: com.websnake.recentstv
 @Composable
 private fun rowLayout(items: List<Item>, focus: Int, width: (Item) -> Dp, gap: Dp): RowLayout {
     val density = LocalDensity.current
-    return remember(items, focus, density, gap) {
+    return remember(items, focus, density, gap, width(Item.Settings)) {
         val slots = items.mapIndexed { i, it -> Slot(it.key, it, i, width(it)) }.asReversed().toList()
         val strip = with(density) { Geometry.layout(slots.map { it.width.toPx() }, gap.toPx(), EDGE.toPx()) }
         RowLayout(slots, strip, slots.indexOfFirst { it.logical == focus })
     }
 }
 
+/** Where everything sits top to bottom, in dp from the top of the screen, after fitting the screen's height. */
+private class Fit(val cardDp: Dp, val pinDp: Dp, val frameTop: Dp, val frameHead: Dp, val pinsCenter: Dp, val tasksCenter: Dp)
+
 /**
- * Surface 1 — the recents overlay (magisk-root): the pinned apps on their own row at the top, the recent apps on the
- * row below (RTL: Kill all far right, newest next to it), the ⚙ Settings button above both. Positions are computed
- * (Geometry), not measured, and every moving value is read in the draw phase (graphicsLayer / drawBehind), so a focus
- * move or a removal animates without recomposing or re-laying-out the rows.
+ * The vertical budget: header, the pinned frame, the recents row with its name and count, the footer hints. When it
+ * doesn't fit (Large cards with pins "Same as tasks") the gaps tighten first, then the pins shrink, then the cards;
+ * when there is room to spare the recents row settles lower, so a Small layout isn't top-heavy.
+ */
+private fun fit(screenH: Dp, card: Dp, pin: Dp, hasPins: Boolean): Fit {
+    val s = Motion.FOCUS_SCALE
+    if (!hasPins) return Fit(card, pin, FRAME_TOP, FRAME_HEAD, FRAME_TOP, screenH / 2f - 8.dp)
+    val bottom = screenH - FOOTER_CLEAR
+    var top = FRAME_TOP; var head = FRAME_HEAD; var gap = SECTION_GAP
+    var c = card; var p = pin
+    fun need() = top + head + p * s + FRAME_FOOT + gap + c * s + TASK_TAIL
+    var over = need() - bottom
+    if (over > 0.dp) { val d = minOf(over, 12.dp); gap -= d; over -= d }
+    if (over > 0.dp) { val d = minOf(over, 12.dp); top -= d; over -= d }
+    if (over > 0.dp) { val d = minOf(over, 6.dp); head -= d; over -= d }
+    if (over > 0.dp) { val d = minOf(over, p * s * 0.35f); p -= d / s; over -= d }
+    if (over > 0.dp) { val d = minOf(over, c * s * 0.35f); c -= d / s; over -= d }
+    val slack = (bottom - need()).coerceAtLeast(0.dp)
+    val pinsCenter = top + head + p * s / 2f
+    val frameBottom = pinsCenter + p * s / 2f + FRAME_FOOT
+    val tasksCenter = frameBottom + gap + minOf(slack * 0.45f, 44.dp) + c * s / 2f
+    return Fit(c, p, top, head, pinsCenter, tasksCenter)
+}
+
+/**
+ * Surface 1 — the recents overlay (magisk-root): the pinned apps in their own framed section at the top, the recent
+ * apps on the row below (RTL: Kill all far right, newest next to it), the ⚙ Settings button above both. Positions are
+ * computed (Geometry, [fit]), not measured, and every moving value is read in the draw phase (graphicsLayer /
+ * drawBehind), so a focus move or a removal animates without recomposing or re-laying-out the rows.
  *
  * [loadId] changes on every fresh load: positions snap instead of sliding in.
  */
@@ -132,96 +169,124 @@ fun RecentsOverlay(
     loadId: Int,
     onFlyComplete: (String) -> Unit,
     limited: Boolean = false,
+    toastOn: Boolean = false,
 ) = BoxWithConstraints(Modifier.fillMaxSize()) {
     val density = LocalDensity.current
     val viewportW = constraints.maxWidth.toFloat()
     val viewportH = constraints.maxHeight.toFloat()
-    val cardDp = settings.size.dp
-    val pinDp = cardDp * settings.pinSize.factor
+    val hasPins = state.pins.isNotEmpty()
+    val f = remember(settings.size, settings.pinSize, hasPins, viewportH, density) {
+        fit(with(density) { viewportH.toDp() }, settings.size.dp, settings.size.dp * settings.pinSize.factor, hasPins)
+    }
+    val cardDp = f.cardDp
+    val pinDp = f.pinDp
     val cardShape = settings.shape.shape()
+    val circle = settings.shape == com.websnake.recentstv.logic.CardShape.CIRCLE
     val menuOpen = state.ctxPkg != null
     val selecting = state.selecting
-    val hasPins = state.pins.isNotEmpty()
+    val pinsFocused = state.focusIn(RowId.PINS)
 
     // ── where the rows sit (offsets from the vertical centre, px) ──
-    val pinsY: Float
-    val tasksY: Float
-    with(density) {
-        val pinHalf = (pinDp * Motion.FOCUS_SCALE / 2f).toPx()
-        val cardHalf = (cardDp * Motion.FOCUS_SCALE / 2f).toPx()
-        if (hasPins) {
-            val pinsCenter = (FRAME_TOP + FRAME_HEAD).toPx() + pinHalf
-            pinsY = pinsCenter - viewportH / 2f
-            val frameBottom = pinsCenter + pinHalf + FRAME_FOOT.toPx()
-            tasksY = maxOf(32.dp.toPx(), frameBottom + SECTION_GAP.toPx() + cardHalf - viewportH / 2f)
-        } else {
-            pinsY = 0f
-            tasksY = 0f
-        }
-    }
+    val pinsY = with(density) { f.pinsCenter.toPx() } - viewportH / 2f
+    val tasksY = with(density) { f.tasksCenter.toPx() } - viewportH / 2f
     fun rowY(r: RowId) = if (r == RowId.PINS) pinsY else tasksY
-    fun rowCardDp(r: RowId) = if (r == RowId.PINS) pinDp else cardDp
+    val pinHalfPx = with(density) { (pinDp * Motion.FOCUS_SCALE / 2f).toPx() }
+    val cardHalfPx = with(density) { (cardDp * Motion.FOCUS_SCALE / 2f).toPx() }
+    val frameTopPx = viewportH / 2f + pinsY - pinHalfPx - with(density) { f.frameHead.toPx() }
 
     // everything but the chosen card fades out when an app is chosen
     val chrome = animateFloatAsState(if (selecting != null) 0f else 1f, tween(Motion.CHROME_FADE_MS), label = "chrome")
-    // the rows slide down while the menu is open: far enough for the whole menu to fit above its card
+    // The menu opens above its card (a pin: above the pinned frame). The rows slide down just far enough for it to fit
+    // under the top margin, and never so far that the menu's own row leaves the screen. The other section steps aside.
+    val menuA = animateFloatAsState(if (menuOpen) 1f else 0f, tween(200), label = "menuA")
+    val anchorRest = if (state.ctxRow == RowId.PINS) frameTopPx + with(density) { (MENU_GAP - 12.dp).toPx() }
+        else viewportH / 2f + tasksY - cardHalfPx
     val shiftOpen = with(density) {
-        val half = viewportH / 2f
-        val cardTop = half + rowY(state.ctxRow) - (rowCardDp(state.ctxRow) * Motion.FOCUS_SCALE / 2f).toPx()
-        maxOf(MENU_SHIFT.toPx(), (MENU_EST_H + 39.dp).toPx() - cardTop)
+        val need = (MENU_EST_H + MENU_GAP + MENU_TOP_MARGIN).toPx() - anchorRest
+        val rowBottom = if (state.ctxRow == RowId.PINS) viewportH / 2f + pinsY + pinHalfPx + FRAME_FOOT.toPx()
+            else viewportH / 2f + tasksY + cardHalfPx
+        need.coerceIn(0f, (viewportH - 16.dp.toPx() - rowBottom).coerceAtLeast(0f))
     }
     val shift = animateFloatAsState(
         if (menuOpen) shiftOpen else 0f,
         tween(Motion.MENU_SHIFT_MS, easing = Motion.standard), label = "shift",
     )
+    // while a menu is open the section it doesn't belong to goes away, so nothing shows through or collides
+    val tasksA = animateFloatAsState(if (menuOpen && state.ctxRow == RowId.PINS) 0f else 1f, tween(200), label = "tasksA")
+    val pinsA = animateFloatAsState(if (menuOpen && state.ctxRow == RowId.TASKS) 0f else 1f, tween(200), label = "pinsA")
 
     val tasksRow = rowLayout(state.items, state.focus, { if (it == Item.KillAll) cardDp * 1.34f else cardDp }, GAP)
     val pinsRow = rowLayout(state.pins, state.pinFocus, { pinDp }, PIN_GAP)
+    val pinsOverflow = pinsRow.strip.total > viewportW
 
     /**
      * Horizontal offset of a row's strip. The recents row scrolls so its focused app is in the middle; the pinned
-     * section stays put, centred on screen (it only scrolls if there are more pins than fit across).
+     * section stays put, centred on screen. With more pins than fit across it scrolls too, but only as far as its ends.
      */
-    fun offsetOf(r: RowId, layout: RowLayout): Float =
-        if (r == RowId.PINS && layout.strip.total <= viewportW) (viewportW - layout.strip.total) / 2f
-        else Geometry.stripOffset(viewportW, layout.strip, layout.focusVisual)
+    fun offsetOf(r: RowId, layout: RowLayout): Float = when {
+        r == RowId.TASKS -> Geometry.stripOffset(viewportW, layout.strip, layout.focusVisual)
+        !pinsOverflow -> (viewportW - layout.strip.total) / 2f
+        else -> Geometry.stripOffset(viewportW, layout.strip, layout.focusVisual).coerceIn(viewportW - layout.strip.total, 0f)
+    }
 
-    // ── header: the title at the top left; the ⚙ at the top centre ──
-    Text(
-        "Recent apps", style = Type.title, color = Tokens.text,
-        modifier = Modifier.align(Alignment.TopStart).padding(start = 48.dp, top = 36.dp).graphicsLayer { alpha = chrome.value },
-    )
-    // ── how many recent apps: under the recents row, centred on screen (it doesn't move with the row) ──
+    // ── a darker backdrop while a menu is open: the dimmed cards don't let the app behind read through ──
+    Box(Modifier.fillMaxSize().drawBehind { if (menuA.value > 0.01f) drawRect(Color.Black, alpha = 0.45f * menuA.value) })
+
+    // ── header: the title at the top left, the ⚙ at the top centre, on one line; both step aside for a menu ──
+    Box(
+        Modifier.align(Alignment.TopStart).padding(start = 48.dp, top = HEADER_TOP).height(GEAR_H)
+            .graphicsLayer { alpha = chrome.value * (1f - menuA.value) },
+        contentAlignment = Alignment.CenterStart,
+    ) { Text("Recent apps", style = Type.title, color = Tokens.text, maxLines = 1) }
+    Box(
+        Modifier.align(Alignment.TopCenter).padding(top = HEADER_TOP)
+            .graphicsLayer { alpha = chrome.value * (1f - menuA.value) },
+    ) { SettingsButton(state.gearFocused) }
+
+    // ── how many recent apps: under the recents row, centred on screen (it doesn't move with the row). It steps
+    //    aside for anything that lands there: the remove hint, a toast, a menu ──
     val count = SettingsCodec.countLabel(state.tasks.size)
-    val countA = animateFloatAsState(if (menuOpen || state.killing) 0f else 1f, tween(200), label = "count")
+    val nameShown = state.focusIn(RowId.TASKS) && state.focusedItem is Item.Task
+    val countA = animateFloatAsState(
+        if (menuOpen || state.killing || state.peek != PEEK_NONE || state.flying != null || toastOn) 0f else 1f,
+        tween(160), label = "count",
+    )
+    val countY = animateFloatAsState(
+        with(density) { (if (nameShown) COUNT_GAP else COUNT_GAP_BARE).toPx() }, tween(Motion.FOCUS_MS, easing = Motion.standard), label = "countY",
+    )
     if (count.isNotEmpty()) Text(
         count, style = Type.small, color = Tokens.textDim, maxLines = 1,
         modifier = Modifier.align(Alignment.Center).graphicsLayer {
             alpha = countA.value * chrome.value
-            translationY = (tasksY + (cardDp * Motion.FOCUS_SCALE / 2f + COUNT_GAP).toPx()).roundToInt().toFloat()
+            translationY = (tasksY + cardHalfPx + countY.value).roundToInt().toFloat()
         },
     )
-    val gearDim = animateFloatAsState(if (menuOpen) DIMMED else 1f, tween(200), label = "gearDim")
-    Box(
-        Modifier.align(Alignment.TopCenter).padding(top = 36.dp)
-            .graphicsLayer { alpha = gearDim.value * chrome.value },
-    ) { SettingsButton(state.gearFocused) }
 
     // ── the pinned section: an outlined frame around the pins, its "Pinned" title inside the top edge ──
+    val measurer = rememberTextMeasurer()
+    val focusedPin = if (pinsFocused) pinsRow.slots.getOrNull(pinsRow.focusVisual) else null
+    val focusedPinLabelW = focusedPin?.let { s -> info[s.key]?.label }?.let { name ->
+        remember(name) { measurer.measure(name, Type.label, maxLines = 1).size.width.toFloat() }
+    } ?: 0f
     val (frameL, frameW) = if (!hasPins) 0f to 0f else with(density) {
         val strip = pinsRow.strip
         val ox = offsetOf(RowId.PINS, pinsRow)
-        val l = ox + strip.lefts.first() - FRAME_SIDE.toPx()
-        val r = ox + strip.lefts.last() + strip.widths.last() + FRAME_SIDE.toPx()
-        val w = maxOf(r - l, FRAME_MIN_W.toPx())
-        (l + r) / 2f - w / 2f to w
+        var l = ox + strip.lefts.first() - FRAME_SIDE.toPx()
+        var r = ox + strip.lefts.last() + strip.widths.last() + FRAME_SIDE.toPx()
+        val mid = (l + r) / 2f
+        var half = maxOf((r - l) / 2f, FRAME_MIN_W.toPx() / 2f)
+        // wide enough for the focused pin's name to sit centred under its icon
+        if (focusedPin != null) {
+            val cx = ox + strip.center(pinsRow.focusVisual)
+            half = maxOf(half, kotlin.math.abs(cx - mid) + focusedPinLabelW / 2f + FRAME_INSET.toPx())
+        }
+        l = (mid - half).coerceAtLeast(FRAME_SCREEN_MARGIN.toPx())
+        r = (mid + half).coerceAtMost(viewportW - FRAME_SCREEN_MARGIN.toPx())
+        l to (r - l)
     }
     if (hasPins) {
-        val sectionA = animateFloatAsState(
-            if (menuOpen && state.ctxRow != RowId.PINS) DIMMED else 1f, tween(200), label = "pinSection",
-        )
-        // the outline takes the accent while the focus is in the section
-        val active = animateFloatAsState(if (state.focusIn(RowId.PINS)) 1f else 0f, tween(Motion.FOCUS_MS), label = "pinActive")
+        // the outline takes the accent, and the frame grows to hold the name, while the focus is in the section
+        val active = animateFloatAsState(if (pinsFocused) 1f else 0f, tween(Motion.FOCUS_MS, easing = Motion.standard), label = "pinActive")
         val accent = LocalAccent.current
         val fl = remember(loadId) { Animatable(frameL) }
         val fw = remember(loadId) { Animatable(frameW) }
@@ -229,22 +294,22 @@ fun RecentsOverlay(
         LaunchedEffect(frameW) { if (fw.targetValue != frameW) fw.animateTo(frameW, Motion.glide()) }
         Box(
             Modifier.fillMaxSize().drawBehind {
-                val a = sectionA.value * chrome.value
+                val a = pinsA.value * chrome.value
                 if (a <= 0.01f) return@drawBehind
-                val pinHalf = (pinDp * Motion.FOCUS_SCALE / 2f).toPx()
-                val center = size.height / 2f + pinsY + shift.value
-                val top = center - pinHalf - FRAME_HEAD.toPx()
-                val h = FRAME_HEAD.toPx() + pinHalf * 2f + FRAME_FOOT.toPx()
+                val top = frameTopPx + shift.value
+                val foot = FRAME_FOOT_REST.toPx() + (FRAME_FOOT - FRAME_FOOT_REST).toPx() * active.value
+                val h = f.frameHead.toPx() + pinHalfPx * 2f + foot
                 val cr = CornerRadius(24.dp.toPx())
-                drawRoundRect(Color.White.copy(alpha = 0.04f * a), Offset(fl.value, top), Size(fw.value, h), cr)
-                val edge = lerp(Color.White.copy(alpha = 0.16f), accent.base.copy(alpha = 0.6f), active.value)
+                // a dark fill: whatever the app behind shows there must not read as part of the section
+                drawRoundRect(Tokens.surface.copy(alpha = 0.78f * a), Offset(fl.value, top), Size(fw.value, h), cr)
+                val edge = lerp(Color.White.copy(alpha = 0.18f), accent.base.copy(alpha = 0.6f), active.value)
                 drawRoundRect(edge.copy(alpha = edge.alpha * a), Offset(fl.value, top), Size(fw.value, h), cr, style = Stroke(1.5.dp.toPx()))
             },
         )
         Row(
             Modifier.align(Alignment.Center).graphicsLayer {
-                alpha = sectionA.value * chrome.value
-                translationY = (pinsY - (pinDp * Motion.FOCUS_SCALE / 2f).toPx() - FRAME_HEAD.toPx() / 2f + shift.value).roundToInt().toFloat()
+                alpha = pinsA.value * chrome.value
+                translationY = (pinsY - pinHalfPx - f.frameHead.toPx() / 2f + shift.value).roundToInt().toFloat()
             },
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -262,6 +327,7 @@ fun RecentsOverlay(
             if (tx.targetValue != targetTx) tx.animateTo(targetTx, Motion.glide())
         }
         val y = rowY(r)
+        val sectionA = if (r == RowId.PINS) pinsA else tasksA
         layout.slots.forEachIndexed { vi, slot ->
             key(r, slot.key) {
                 val left = layout.strip.lefts[vi]
@@ -281,7 +347,7 @@ fun RecentsOverlay(
                             // whole pixels: text and icon move together, no sub-pixel shimmer
                             translationX = (leftAnim.value + tx.value).roundToInt().toFloat()
                             translationY = (y + shift.value).roundToInt().toFloat()
-                            alpha = dim.value * (if (chosen) 1f else chrome.value)
+                            alpha = dim.value * sectionA.value * (if (chosen) 1f else chrome.value)
                         },
                 ) {
                     when (item) {
@@ -294,7 +360,8 @@ fun RecentsOverlay(
                                 task = task,
                                 pinned = r == RowId.TASKS && slot.key in state.pinned,
                                 running = item !is Item.Pin || item.running,
-                                showRunning = r == RowId.PINS,
+                                // the dots step aside while a pin's name is showing: the name would run over them
+                                showRunning = r == RowId.PINS && !pinsFocused,
                                 focused = focused,
                                 pressing = focused && state.pressing,
                                 peek = if (focused && r == RowId.TASKS) state.peek else PEEK_NONE,
@@ -304,9 +371,9 @@ fun RecentsOverlay(
                                 staggerIndex = slot.logical,
                                 labelOn = focused && state.peek == PEEK_NONE && state.flying == null && !state.killing &&
                                     selecting == null && !menuOpen,
-                                cardDp = slot.width, cardShape = cardShape,
+                                cardDp = slot.width, cardShape = cardShape, circle = circle,
                                 compactLabel = r == RowId.PINS,
-                                labelMaxW = with(density) { (frameW - FRAME_INSET.toPx() * 2f).toDp() },
+                                labelMaxW = with(density) { (frameW - FRAME_INSET.toPx() * 2f).coerceAtLeast(40.dp.toPx()).toDp() },
                                 labelMinX = frameL + with(density) { FRAME_INSET.toPx() } - (targetTx + layout.strip.center(vi)),
                                 labelMaxX = frameL + frameW - with(density) { FRAME_INSET.toPx() } - (targetTx + layout.strip.center(vi)),
                                 onFlyComplete = { onFlyComplete(slot.key) },
@@ -323,11 +390,11 @@ fun RecentsOverlay(
     if (state.emptySlot) Box(
         Modifier.align(Alignment.Center).graphicsLayer {
             translationY = (tasksY + shift.value).roundToInt().toFloat()
-            alpha = chrome.value * (if (menuOpen) DIMMED else 1f)
+            alpha = chrome.value * tasksA.value
         },
     ) { EmptySlotBox(cardDp) }
 
-    // ── hold-OK menu, above the target card ──
+    // ── hold-OK menu: above the target card; for a pin, above the pinned frame ──
     val ctxTask = state.ctxPkg?.let { info[it] }
     val ctxLayout = if (state.ctxRow == RowId.PINS) pinsRow else tasksRow
     val ctxVisual = ctxLayout.slots.indexOfFirst { it.key == state.ctxPkg }
@@ -340,21 +407,25 @@ fun RecentsOverlay(
             if (ctxVisual >= 0) ctxLayout.strip.center(ctxVisual) + offsetOf(state.ctxRow, ctxLayout)
             else viewportW / 2f
         },
-        anchorTop = {
-            val w = if (ctxVisual >= 0) ctxLayout.slots[ctxVisual].width else cardDp
-            viewportH / 2f + rowY(state.ctxRow) + shift.value - with(density) { (w * Motion.FOCUS_SCALE / 2f).toPx() }
-        },
+        anchorTop = { anchorRest + shift.value },
         viewportW = viewportW,
     )
 
-    // ── footer key hints (hidden while the menu is open) ──
-    val footer by animateFloatAsState(if (menuOpen) 0f else 1f, tween(200), label = "foot")
+    // ── footer key hints: what the keys do on the thing in focus (hidden while the menu is open) ──
+    val footer by animateFloatAsState(if (menuOpen || toastOn) 0f else 1f, tween(200), label = "foot")
+    val hints = when {
+        state.gearFocused -> listOf("OK" to "Settings", "↓" to "Apps", "Back" to "Close")
+        state.peek != PEEK_NONE -> listOf("OK / ↓" to "Remove", "↑ / Back" to "Keep")
+        state.focusedItem == Item.KillAll -> listOf("OK" to "Close all apps", "Back" to "Close")
+        pinsFocused -> listOf("OK" to "Open", "Hold OK" to "Options", "Back" to "Close")
+        else -> listOf("OK" to "Open", "Hold OK" to "Options", "↓" to "Remove", "Back" to "Close")
+    }
     Row(
         Modifier.align(Alignment.BottomCenter).padding(bottom = 34.dp).graphicsLayer { alpha = footer * chrome.value },
         horizontalArrangement = Arrangement.spacedBy(24.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        KeyHint("OK", "Open"); KeyHint("Hold OK", "Options"); KeyHint("↓ ↓", "Remove"); KeyHint("Back", "Close")
+        hints.forEach { (k, v) -> key(k, v) { KeyHint(k, v) } }
     }
     // Shizuku is off (after a reboot, Shizuku build only): the row comes from the last list + usage access
     if (limited) Text(
@@ -409,7 +480,7 @@ private fun DrawScope.shapeGlow(shape: Shape, color: Color, at: Offset, w: Float
 private val LIMITED_TINT = androidx.compose.ui.graphics.Color(0xFFE8B04B)
 
 @Composable
-private fun KeyHint(key: String, label: String) {
+internal fun KeyHint(key: String, label: String) {
     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(
             key, style = Type.small.copy(fontWeight = FontWeight.Bold), color = Tokens.text, maxLines = 1,
@@ -463,6 +534,7 @@ private fun AppCard(
     cardDp: Dp,
     cardShape: Shape,
     onFlyComplete: () -> Unit,
+    circle: Boolean = false,
     compactLabel: Boolean = false,       // pinned section: the name only, right under the icon
     labelMaxW: Dp = 300.dp,
     labelMinX: Float = 0f,               // compact: the name's allowed span, px from the card's centre
@@ -542,12 +614,14 @@ private fun AppCard(
                 .graphicsLayer {
                     scaleX = scale.value; scaleY = scale.value
                     translationY = peekY.value + fly.value
-                    alpha = baseAlpha.value * flyAlpha.value
+                    alpha = flyAlpha.value
                     this.shape = cardShape; clip = true
                 }
                 .background(Tokens.card)
                 .drawWithContent {
                     drawContent()
+                    val shade = (1f - baseAlpha.value) * 1.5f
+                    if (shade > 0.01f) drawRect(Color.Black, alpha = shade.coerceAtMost(1f))
                     val f = focusAmt.value
                     if (f > 0.01f) drawOutline(
                         cardShape.createOutline(size, layoutDirection, this),
@@ -567,6 +641,7 @@ private fun AppCard(
             }
         }
         // pin badge on the top corner (RTL inline-end = left), moving with the card
+        val badge = (cardDp * 0.24f).coerceIn(16.dp, 22.dp)
         if (pinned) {
             Box(
                 Modifier
@@ -580,14 +655,18 @@ private fun AppCard(
                 Box(
                     Modifier
                         .align(Alignment.TopStart)
-                        .graphicsLayer { translationX = -5.dp.toPx(); translationY = -5.dp.toPx() }
-                        .size(22.dp)
+                        .graphicsLayer {
+                            // a circle's outline is 14.6 % in from the corner of its square
+                            val at = if (circle) cardDp.toPx() * 0.146f - badge.toPx() / 2f else -5.dp.toPx()
+                            translationX = at; translationY = at
+                        }
+                        .size(badge)
                         .clip(RoundedCornerShape(percent = 50))
                         .background(Tokens.bg)
                         .border(1.dp, Tokens.text.copy(alpha = 0.22f), RoundedCornerShape(percent = 50)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Image(painterResource(R.drawable.ic_pin), null, colorFilter = ColorFilter.tint(Tokens.text), modifier = Modifier.size(11.dp))
+                    Image(painterResource(R.drawable.ic_pin), null, colorFilter = ColorFilter.tint(Tokens.text), modifier = Modifier.size(badge * 0.5f))
                 }
             }
         }
@@ -641,21 +720,21 @@ private fun PeekHint(peek: Int, cardDp: Dp) {
             .requiredWidth(cardDp * 4.5f)
             .graphicsLayer {
                 alpha = a
-                translationY = lastDir * (cardDp * 0.5f * Motion.FOCUS_SCALE + 40.dp).toPx()
+                translationY = lastDir * (cardDp * 0.5f * Motion.FOCUS_SCALE + 48.dp).toPx()
             },
         contentAlignment = Alignment.Center,
     ) {
         Row(
             Modifier
                 .clip(RoundedCornerShape(percent = 50))
-                .background(accent.tint)
+                .background(Tokens.surface)
                 .border(1.dp, accent.border, RoundedCornerShape(percent = 50))
                 .padding(horizontal = 14.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(if (lastDir == PEEK_UP) "▲" else "▼", style = Type.small, color = accent.base)
-            Text("↓ or OK removes · ↑ keeps it", style = Type.small, color = accent.base, maxLines = 1)
+            Text("Press ↓ or OK to remove", style = Type.small, color = accent.base, maxLines = 1)
         }
     }
 }
@@ -690,6 +769,7 @@ private fun KillAllTile(focused: Boolean, cardDp: Dp, cardShape: Shape, killing:
                 }
                 .drawBehind {
                     val outline = cardShape.createOutline(size, layoutDirection, this)
+                    drawOutline(outline, Tokens.surface)        // opaque under the tint: a bright app must not show through
                     drawOutline(outline, lerp(accent.tint, accent.base, f.value))
                     drawOutline(outline, lerp(accent.border, accent.base, f.value), style = Stroke(2.dp.toPx()))
                 },
@@ -709,7 +789,7 @@ private fun KillAllTile(focused: Boolean, cardDp: Dp, cardShape: Shape, killing:
 
 /** The ⚙ Settings button at the top of the overlay, as wide as its icon and text. Neutral until focused (↑ from the top row). */
 @Composable
-private fun SettingsButton(focused: Boolean) {
+internal fun SettingsButton(focused: Boolean) {
     val accent = LocalAccent.current
     val std = tween<Float>(Motion.FOCUS_MS, easing = Motion.standard)
     val scale = animateFloatAsState(if (focused) Motion.KILL_FOCUS_SCALE else 1f, Motion.glide(), label = "pscale")
@@ -721,18 +801,8 @@ private fun SettingsButton(focused: Boolean) {
             .height(GEAR_H)
             .graphicsLayer { scaleX = scale.value; scaleY = scale.value }
             .drawBehind {
-                // the glow reaches past the pill: drawn before the clip
-                if (f.value > 0.01f) {
-                    val w = size.width * 1.5f
-                    val h = size.height * 2.6f
-                    drawOval(
-                        Brush.radialGradient(
-                            listOf(accent.glow.copy(alpha = accent.glow.alpha * f.value), Color.Transparent),
-                            center = center, radius = w / 2f,
-                        ),
-                        topLeft = Offset(center.x - w / 2f, center.y - h / 2f), size = Size(w, h),
-                    )
-                }
+                // the same halo as the cards, drawn before the clip
+                shapeGlow(shape, accent.glow, center, size.width, size.height, GLOW_SPREAD.toPx(), f.value)
             }
             .clip(shape)
             .drawBehind {

@@ -22,7 +22,7 @@ import androidx.tv.material3.Text
 import com.websnake.recentstv.ui.theme.Tokens
 import com.websnake.recentstv.ui.theme.Type
 
-/** White pill near the bottom that confirms an action (~1.8 s, timed by the caller). */
+/** White pill at the bottom, where the key hints sit (they step aside for it), that confirms an action (~1.8 s, timed by the caller). */
 @Composable
 fun Toast(text: String?) {
     var last by remember { mutableStateOf("") }
@@ -33,7 +33,7 @@ fun Toast(text: String?) {
         Text(
             last, style = Type.body.copy(fontWeight = FontWeight.Bold), color = Tokens.bg, maxLines = 1,
             modifier = Modifier
-                .padding(bottom = 75.dp)
+                .padding(bottom = 28.dp)
                 .graphicsLayer { alpha = a; translationY = (1f - a) * 10.dp.toPx() }
                 .clip(RoundedCornerShape(percent = 50))
                 .background(Tokens.text)

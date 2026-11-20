@@ -71,10 +71,10 @@ fun ContextMenu(
     if (shown <= 0f && task == null) return
 
     val rows = listOf(
-        (if (isPinned) "Unpin" else "Pin to row") to (if (isPinned) R.drawable.ic_unpin else R.drawable.ic_pin),
-        "Add to exceptions" to R.drawable.ic_hide,
+        (if (isPinned) "Unpin" else "Pin") to (if (isPinned) R.drawable.ic_unpin else R.drawable.ic_pin),
+        "Hide from Recent apps" to R.drawable.ic_hide,
         "App info" to R.drawable.ic_info,
-        "Close" to R.drawable.ic_close,
+        "Close app" to R.drawable.ic_close,
     )
     val fade = Modifier.graphicsLayer {
         alpha = shown

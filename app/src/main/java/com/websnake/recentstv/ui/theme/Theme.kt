@@ -110,7 +110,7 @@ fun accentPaletteFor(base: Color) = AccentPalette(
     tint = base.copy(alpha = 0.14f),
     border = base.copy(alpha = 0.45f),
     glow = base.copy(alpha = 0.55f),
-    onDark = Tokens.accentOnDark,
+    onDark = Color(0xFF0B0D10),
 )
 
 val LocalAccent = androidx.compose.runtime.staticCompositionLocalOf { accentPaletteFor(Tokens.accent) }

@@ -138,12 +138,16 @@ class RecentsActivity : ComponentActivity() {
                     Modifier.fillMaxSize().drawBehind {
                         if (scrim <= 0f) return@drawBehind
                         when {
-                            // TV Recents' scrim: 60 % black at the top to 80 % at the bottom
+                            // TV Recents' scrim (60 % black rising to 80 % at the bottom), plus a darker band at the
+                            // top so the title, the Settings button and the pinned section stay readable over an app's header
                             bg == Backdrop.FADE -> drawRect(
-                                Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.6f), Color.Black.copy(alpha = 0.8f))),
+                                Brush.verticalGradient(
+                                    0f to Color.Black.copy(alpha = 0.84f), 0.26f to Color.Black.copy(alpha = 0.62f),
+                                    1f to Color.Black.copy(alpha = 0.8f),
+                                ),
                                 alpha = scrim,
                             )
-                            bg == Backdrop.COLOR -> drawRect(BackdropSwatches[settings.bgColor].second, alpha = 0.94f * scrim)
+                            bg == Backdrop.COLOR -> drawRect(BackdropSwatches[settings.bgColor].second, alpha = scrim)
                             bg == Backdrop.IMAGE -> if (backdropImage == null) drawRect(Tokens.bg, alpha = 0.94f * scrim)
                             blurOn -> drawRect(Color.Black, alpha = 0.42f * scrim)
                             else -> drawRect(Color.Black, alpha = settings.bgDim / 100f * scrim)
@@ -173,7 +177,7 @@ class RecentsActivity : ComponentActivity() {
                             Scene.EMPTY -> EmptyState()
                             Scene.OVERLAY -> RecentsOverlay(
                                 state = st, info = info, settings = settings, loadId = loadId,
-                                onFlyComplete = ::onFlyComplete, limited = limited,
+                                onFlyComplete = ::onFlyComplete, limited = limited, toastOn = toast != null,
                             )
                         }
                     }
@@ -288,6 +292,7 @@ class RecentsActivity : ComponentActivity() {
             val stored = tasksDef?.await()
             val tasks: List<Seen> = stored?.first.orEmpty()
             val soft: List<Seen> = usageDef?.await() ?: limitedSoft.orEmpty()
+            val tSoft = SystemClock.uptimeMillis() - t0
             val mode = if (!ready) RowMode.LIMITED else stored?.second ?: RowMode.NONE
             val ledger = Stored.prune(rows.ledger(), now - RowStore.USAGE_DAYS * RowStore.DAY_MS)
             val r = repo.resolveRow(tasks, soft, ledger, s.exceptions, s.pinned, Stored.ROW_MAX)
@@ -307,7 +312,7 @@ class RecentsActivity : ComponentActivity() {
             contentOn = true
             val nowUp = SystemClock.uptimeMillis()
             Log.i(TAG, "content ${r.all.size} apps (${r.all.count { (it.taskId ?: -1) > 0 }} resumable) ${r.pins.size} pins mode=$mode " +
-                "stored=${tasks.size} usage=${soft.size} current=${if (ready) repo.current else limitedCurrent} load=${nowUp - t0}ms (settings@$tSet store@$tRaw resolved@$tRes) sinceStart=${nowUp - openedAt}ms")
+                "stored=${tasks.size} usage=${soft.size} current=${if (ready) repo.current else limitedCurrent} load=${nowUp - t0}ms (settings@$tSet store@$tRaw usage@$tSoft resolved@$tRes) sinceStart=${nowUp - openedAt}ms")
         }
     }
 
@@ -344,7 +349,7 @@ class RecentsActivity : ComponentActivity() {
             is Effect.KillAll -> killAll(e.tasks)
             is Effect.AddException -> {
                 saveSettings(settings.copy(exceptions = settings.exceptions + e.pkg))
-                showToast("${label(e.pkg)} added to exceptions")
+                showToast("${label(e.pkg)} hidden from Recent apps")
             }
             is Effect.SetPin -> {
                 saveSettings(SettingsNav.setPin(settings, e.pkg, e.pinned))
