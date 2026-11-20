@@ -43,7 +43,9 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.layout.ContentScale
@@ -81,7 +83,8 @@ private val PIN_GAP = 18.dp
 private val EDGE = 38.dp
 private val PEEK = 23.dp
 private val FLY = 350.dp
-private val LABEL_GAP = 15.dp         // design: 30px → 40px below the card as it fades in
+private val LABEL_GAP = 7.dp          // focused card → its name (plus 3dp as it fades in)
+private val GLOW_SPREAD = 11.dp       // how far the focus glow reaches past the card
 private val MENU_SHIFT = 97.dp        // the rows slide down while the hold-OK menu is open
 private val EMPTY_SLOT_W = 320.dp
 private val GEAR_H = 38.dp            // ⚙ Settings button at the top
@@ -93,7 +96,7 @@ private val FRAME_SIDE = 22.dp        // frame edge ↔ first / last pin
 private val FRAME_MIN_W = 200.dp      // a lone pin still has room for its name
 private val FRAME_INSET = 10.dp       // a pin's name stays this far inside the frame
 private val PIN_LABEL_GAP = 6.dp      // pin → its name
-private val COUNT_GAP = 60.dp         // recents row → the "N apps" line, below the focused app's name
+private val COUNT_GAP = 46.dp         // recents row → the "N apps" line, below the focused app's name
 private val SECTION_GAP = 24.dp       // pinned frame → recents row
 private const val DIMMED = 0.32f
 
@@ -385,6 +388,24 @@ fun RecentsOverlay(
     }
 }
 
+/**
+ * The focus glow: a soft halo that follows [shape] (the card shape chosen in Settings) and fades out over [spread]
+ * past the card — a few widening outlines, cheap to draw and never wider than the card needs.
+ */
+private fun DrawScope.shapeGlow(shape: Shape, color: Color, at: Offset, w: Float, h: Float, spread: Float, strength: Float) {
+    if (strength <= 0.01f || spread <= 0f) return
+    val steps = 8
+    val band = spread / steps
+    for (i in 0 until steps) {
+        val grow = band * (i + 0.5f)
+        val fade = 1f - i / steps.toFloat()
+        val outline = shape.createOutline(Size(w + grow * 2f, h + grow * 2f), layoutDirection, this)
+        translate(at.x - w / 2f - grow, at.y - h / 2f - grow) {
+            drawOutline(outline, color.copy(alpha = color.alpha * strength * fade * fade * 0.6f), style = Stroke(band * 1.25f))
+        }
+    }
+}
+
 private val LIMITED_TINT = androidx.compose.ui.graphics.Color(0xFFE8B04B)
 
 @Composable
@@ -496,16 +517,8 @@ private fun AppCard(
                 .drawBehind {
                     val f = focusAmt.value * flyAlpha.value
                     val y = peekY.value + fly.value
-                    if (f > 0.01f) {
-                        val s = scale.value
-                        drawCircle(
-                            brush = Brush.radialGradient(
-                                listOf(accent.glow.copy(alpha = accent.glow.alpha * f), Color.Transparent),
-                                center = center + Offset(0f, y), radius = size.minDimension / 2f * s,
-                            ),
-                            radius = size.minDimension / 2f * s, center = center + Offset(0f, y),
-                        )
-                    }
+                    val side = cardDp.toPx() * scale.value
+                    shapeGlow(cardShape, accent.glow, center + Offset(0f, y), side, side, GLOW_SPREAD.toPx(), f)
                     if (kotlin.math.abs(fly.value) > 1f) {        // streak trailing the flying card
                         val w = 3.dp.toPx(); val len = 110.dp.toPx()
                         val up = fly.value < 0f
@@ -595,7 +608,7 @@ private fun AppCard(
             modifier = (if (compactLabel) Modifier.wrapContentWidth(unbounded = true).widthIn(max = labelMaxW) else Modifier.requiredWidth(300.dp))
                 .graphicsLayer {
                     alpha = labelA.value
-                    val gap = if (compactLabel) PIN_LABEL_GAP + 3.dp * labelA.value else LABEL_GAP + 5.dp * labelA.value
+                    val gap = (if (compactLabel) PIN_LABEL_GAP else LABEL_GAP) + 3.dp * labelA.value
                     val y = (cardDp * Motion.FOCUS_SCALE / 2f + gap).toPx() + size.height / 2f
                     translationY = y.roundToInt().toFloat()
                     if (compactLabel) {
@@ -664,10 +677,7 @@ private fun KillAllTile(focused: Boolean, cardDp: Dp, cardShape: Shape, killing:
                 .requiredSize(w * 1.5f, h * 1.5f)
                 .drawBehind {
                     val a = f.value * gone.value
-                    if (a > 0.01f) drawCircle(
-                        Brush.radialGradient(listOf(accent.glow.copy(alpha = accent.glow.alpha * a), Color.Transparent)),
-                        radius = size.minDimension / 2f * scale.value,
-                    )
+                    shapeGlow(cardShape, accent.glow, center, w.toPx() * scale.value, h.toPx() * scale.value, GLOW_SPREAD.toPx(), a)
                 },
         )
         // unfocused: accent tint + 45 % accent border; focused: solid accent (design)
