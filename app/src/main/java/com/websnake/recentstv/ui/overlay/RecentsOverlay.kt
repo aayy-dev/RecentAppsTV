@@ -93,7 +93,7 @@ private val FRAME_SIDE = 22.dp        // frame edge ↔ first / last pin
 private val FRAME_MIN_W = 200.dp      // a lone pin still has room for its name
 private val FRAME_INSET = 10.dp       // a pin's name stays this far inside the frame
 private val PIN_LABEL_GAP = 6.dp      // pin → its name
-private val COUNT_GAP = 82.dp         // recents row → the "N apps" line, below the focused app's name
+private val COUNT_GAP = 60.dp         // recents row → the "N apps" line, below the focused app's name
 private val SECTION_GAP = 24.dp       // pinned frame → recents row
 private const val DIMMED = 0.32f
 
@@ -589,7 +589,7 @@ private fun AppCard(
                     .clip(RoundedCornerShape(percent = 50))
                     .background(Tokens.text),
             )
-        // name + category under the focused card (a pin: the name only, close under the icon, inside its frame)
+        // the name under the focused card, nothing else (a pin: close under the icon, inside its frame)
         if (labelUsed) Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             modifier = (if (compactLabel) Modifier.wrapContentWidth(unbounded = true).widthIn(max = labelMaxW) else Modifier.requiredWidth(300.dp))
@@ -610,12 +610,6 @@ private fun AppCard(
                 task.label, style = Type.label, color = Tokens.text, maxLines = 1, textAlign = TextAlign.Center,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
             )
-            if (!compactLabel && task.category.isNotBlank()) {
-                Text(
-                    task.category, style = Type.small, color = Tokens.textDim, maxLines = 1,
-                    textAlign = TextAlign.Center, modifier = Modifier.padding(top = 5.dp),
-                )
-            }
         }
         // stage-1 hint, on the side the card is peeking to
         PeekHint(peek = if (flying) PEEK_NONE else peek, cardDp = cardDp)
