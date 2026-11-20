@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -86,9 +88,12 @@ private val GEAR_H = 38.dp            // ⚙ Settings button at the top
 private val MENU_EST_H = 240.dp       // hold-OK menu height (header + 4 rows)
 private val FRAME_TOP = 96.dp         // the pinned section's frame starts below the header line
 private val FRAME_HEAD = 36.dp        // frame edge → focused pin's top: the "Pinned" title sits in it
-private val FRAME_FOOT = 66.dp        // focused pin's bottom → frame edge: room for its name
+private val FRAME_FOOT = 41.dp        // focused pin's bottom → frame edge: room for its name, right under the icon
 private val FRAME_SIDE = 22.dp        // frame edge ↔ first / last pin
-private val FRAME_MIN_W = 300.dp      // wide enough for a focused pin's name (labels are up to 300dp)
+private val FRAME_MIN_W = 200.dp      // a lone pin still has room for its name
+private val FRAME_INSET = 10.dp       // a pin's name stays this far inside the frame
+private val PIN_LABEL_GAP = 6.dp      // pin → its name
+private val COUNT_GAP = 82.dp         // recents row → the "N apps" line, below the focused app's name
 private val SECTION_GAP = 24.dp       // pinned frame → recents row
 private const val DIMMED = 0.32f
 
@@ -178,15 +183,21 @@ fun RecentsOverlay(
         if (r == RowId.PINS && layout.strip.total <= viewportW) (viewportW - layout.strip.total) / 2f
         else Geometry.stripOffset(viewportW, layout.strip, layout.focusVisual)
 
-    // ── header: the title with the count line under it at the top left; the ⚙ at the top centre ──
-    Column(
-        Modifier.align(Alignment.TopStart).padding(start = 48.dp, top = 36.dp).graphicsLayer { alpha = chrome.value },
-        horizontalAlignment = Alignment.Start,
-    ) {
-        Text("Recent apps", style = Type.title, color = Tokens.text)
-        val count = SettingsCodec.countLabel(state.tasks.size, state.pins.size)
-        if (count.isNotEmpty()) Text(count, style = Type.small, color = Tokens.textDim, modifier = Modifier.padding(top = 6.dp))
-    }
+    // ── header: the title at the top left; the ⚙ at the top centre ──
+    Text(
+        "Recent apps", style = Type.title, color = Tokens.text,
+        modifier = Modifier.align(Alignment.TopStart).padding(start = 48.dp, top = 36.dp).graphicsLayer { alpha = chrome.value },
+    )
+    // ── how many recent apps: under the recents row, centred on screen (it doesn't move with the row) ──
+    val count = SettingsCodec.countLabel(state.tasks.size)
+    val countA = animateFloatAsState(if (menuOpen || state.killing) 0f else 1f, tween(200), label = "count")
+    if (count.isNotEmpty()) Text(
+        count, style = Type.small, color = Tokens.textDim, maxLines = 1,
+        modifier = Modifier.align(Alignment.Center).graphicsLayer {
+            alpha = countA.value * chrome.value
+            translationY = (tasksY + (cardDp * Motion.FOCUS_SCALE / 2f + COUNT_GAP).toPx()).roundToInt().toFloat()
+        },
+    )
     val gearDim = animateFloatAsState(if (menuOpen) DIMMED else 1f, tween(200), label = "gearDim")
     Box(
         Modifier.align(Alignment.TopCenter).padding(top = 36.dp)
@@ -194,6 +205,14 @@ fun RecentsOverlay(
     ) { SettingsButton(state.gearFocused) }
 
     // ── the pinned section: an outlined frame around the pins, its "Pinned" title inside the top edge ──
+    val (frameL, frameW) = if (!hasPins) 0f to 0f else with(density) {
+        val strip = pinsRow.strip
+        val ox = offsetOf(RowId.PINS, pinsRow)
+        val l = ox + strip.lefts.first() - FRAME_SIDE.toPx()
+        val r = ox + strip.lefts.last() + strip.widths.last() + FRAME_SIDE.toPx()
+        val w = maxOf(r - l, FRAME_MIN_W.toPx())
+        (l + r) / 2f - w / 2f to w
+    }
     if (hasPins) {
         val sectionA = animateFloatAsState(
             if (menuOpen && state.ctxRow != RowId.PINS) DIMMED else 1f, tween(200), label = "pinSection",
@@ -201,14 +220,6 @@ fun RecentsOverlay(
         // the outline takes the accent while the focus is in the section
         val active = animateFloatAsState(if (state.focusIn(RowId.PINS)) 1f else 0f, tween(Motion.FOCUS_MS), label = "pinActive")
         val accent = LocalAccent.current
-        val (frameL, frameW) = with(density) {
-            val strip = pinsRow.strip
-            val ox = offsetOf(RowId.PINS, pinsRow)
-            val l = ox + strip.lefts.first() - FRAME_SIDE.toPx()
-            val r = ox + strip.lefts.last() + strip.widths.last() + FRAME_SIDE.toPx()
-            val w = maxOf(r - l, FRAME_MIN_W.toPx())
-            (l + r) / 2f - w / 2f to w
-        }
         val fl = remember(loadId) { Animatable(frameL) }
         val fw = remember(loadId) { Animatable(frameW) }
         LaunchedEffect(frameL) { if (fl.targetValue != frameL) fl.animateTo(frameL, Motion.glide()) }
@@ -291,6 +302,10 @@ fun RecentsOverlay(
                                 labelOn = focused && state.peek == PEEK_NONE && state.flying == null && !state.killing &&
                                     selecting == null && !menuOpen,
                                 cardDp = slot.width, cardShape = cardShape,
+                                compactLabel = r == RowId.PINS,
+                                labelMaxW = with(density) { (frameW - FRAME_INSET.toPx() * 2f).toDp() },
+                                labelMinX = frameL + with(density) { FRAME_INSET.toPx() } - (targetTx + layout.strip.center(vi)),
+                                labelMaxX = frameL + frameW - with(density) { FRAME_INSET.toPx() } - (targetTx + layout.strip.center(vi)),
                                 onFlyComplete = { onFlyComplete(slot.key) },
                             )
                         }
@@ -427,6 +442,10 @@ private fun AppCard(
     cardDp: Dp,
     cardShape: Shape,
     onFlyComplete: () -> Unit,
+    compactLabel: Boolean = false,       // pinned section: the name only, right under the icon
+    labelMaxW: Dp = 300.dp,
+    labelMinX: Float = 0f,               // compact: the name's allowed span, px from the card's centre
+    labelMaxX: Float = 0f,
 ) {
     val density = LocalDensity.current
     val accent = LocalAccent.current
@@ -570,19 +589,28 @@ private fun AppCard(
                     .clip(RoundedCornerShape(percent = 50))
                     .background(Tokens.text),
             )
-        // name + category under the focused card
+        // name + category under the focused card (a pin: the name only, close under the icon, inside its frame)
         if (labelUsed) Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier
-                .requiredWidth(300.dp)
+            modifier = (if (compactLabel) Modifier.wrapContentWidth(unbounded = true).widthIn(max = labelMaxW) else Modifier.requiredWidth(300.dp))
                 .graphicsLayer {
                     alpha = labelA.value
-                    val y = (cardDp * Motion.FOCUS_SCALE / 2f + LABEL_GAP + 5.dp * labelA.value).toPx() + size.height / 2f
+                    val gap = if (compactLabel) PIN_LABEL_GAP + 3.dp * labelA.value else LABEL_GAP + 5.dp * labelA.value
+                    val y = (cardDp * Motion.FOCUS_SCALE / 2f + gap).toPx() + size.height / 2f
                     translationY = y.roundToInt().toFloat()
+                    if (compactLabel) {
+                        // an end pin's name would stick out of the frame: slide it back in
+                        val half = size.width / 2f
+                        translationX = (if (-half < labelMinX) labelMinX + half else if (half > labelMaxX) labelMaxX - half else 0f)
+                            .roundToInt().toFloat()
+                    }
                 },
         ) {
-            Text(task.label, style = Type.label, color = Tokens.text, maxLines = 1, textAlign = TextAlign.Center)
-            if (task.category.isNotBlank()) {
+            Text(
+                task.label, style = Type.label, color = Tokens.text, maxLines = 1, textAlign = TextAlign.Center,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            )
+            if (!compactLabel && task.category.isNotBlank()) {
                 Text(
                     task.category, style = Type.small, color = Tokens.textDim, maxLines = 1,
                     textAlign = TextAlign.Center, modifier = Modifier.padding(top = 5.dp),
